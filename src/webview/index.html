@@ -5,6 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Your Copilot</title>
+    <script src="./YourCopilot.js"></script>
 </head>
 
 <body>
@@ -13,7 +14,7 @@
     <form>
         <div class="input-control">
             <label for="ip" class="label">IP</label>
-            <input type="text" name="IP" id="IP" placeholder="localhost:1234" class="input">
+            <input type="text" name="ipAddress" id="ipAddress" placeholder="localhost:1234" class="input">
         </div>
         <div class="chat-container">
             <div class="chat-wrapper">
@@ -40,9 +41,15 @@
 
         <div class="chat-type-container">
             <textarea name="in-text" id="in-text"></textarea>
-            <button class="btn">Send</button>
+            <button class="btn" onclick="() => sendMessage()">Send</button>
         </div>
     </form>
+
+    <script>
+        function sendMessage(){
+            alert("Hello");
+        }
+    </script>
 
     <style>
         .input {
@@ -84,23 +91,23 @@
             padding: 10px;
         }
 
-        .chat{
+        .chat {
             width: 100%;
             margin-bottom: 8px;
         }
 
-        .chat-right{
+        .chat-right {
             width: 100%;
             margin-bottom: 8px;
             text-align: right;
         }
 
-        .chat-type-container{
+        .chat-type-container {
             width: 100%;
             margin-top: 8px;
         }
 
-        textarea{
+        textarea {
             background-color: var(--vscode-input-background);
             color: var(--vscode-input-foreground);
             border-color: var(--vscode-input-border, transparent);
@@ -108,9 +115,10 @@
             width: 100%;
         }
 
-        .btn{
+        .btn {
             margin-top: 8px;
-            color: var(--vscode-button-foreground); background-color: var(--vscode-button-background);
+            color: var(--vscode-button-foreground);
+            background-color: var(--vscode-button-background);
             width: 100%;
             border: none;
             border-radius: 4px;
