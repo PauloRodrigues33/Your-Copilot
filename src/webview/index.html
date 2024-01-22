@@ -1,12 +1,72 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Your Copilot</title>
 </head>
+
 <body>
-    <h1>Your Copilot</h1>
-    <p>Welcome</p>
+    <p>Insert your LLM server (we recomend <a href="https://lmstudio.ai/">LM Studio</a> as your LLM server)</p>
+
+    <form>
+        <div class="input-control">
+            <label for="ip" class="label">IP</label>
+            <input type="text" name="IP" id="IP" placeholder="localhost:1234" class="input">
+        </div>
+        <div class="chat-container">
+            <div class="chat-wrapper">
+                <div class="chat">
+                    <div class="chat-message">
+                        <div class="chat-message-content">
+                            <p>Hi, I'm your copilot</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+
+    <style>
+        .input {
+            background-color: var(--vscode-input-background);
+            color: var(--vscode-input-foreground);
+            border-width: 1px;
+            border-style: solid;
+            border-color: var(--vscode-input-border, transparent);
+            display: flex;
+            flex: 10;
+            border-radius: 4px;
+        }
+
+        .label {
+            display: flex;
+            flex: 2;
+        }
+
+        .input-control {
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+            margin-bottom: 4px;
+        }
+
+        .chat-container {
+            display: flex;
+            flex-direction: row;
+            width: 100%;
+        }
+
+        .chat-wrapper {
+            background-color: var(--vscode-input-background);
+            min-height: 500px;
+            max-height: 700px;
+            flex: 1;
+            border-radius: 4px;
+            padding: 10px;
+        }
+    </style>
 </body>
+
 </html>
