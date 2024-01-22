@@ -20,11 +20,27 @@
                 <div class="chat">
                     <div class="chat-message">
                         <div class="chat-message-content">
+                            <b>Your Copilot:</b>
                             <p>Hi, I'm your copilot</p>
+                            <!-- render a markdown text -->
+                        </div>
+                    </div>
+                </div>
+                <div class="chat-right">
+                    <div class="chat-message">
+                        <div class="chat-message-content">
+                            <b>You:</b>
+                            <p>Hello :D</p>
+                            <!-- render a markdown text -->
                         </div>
                     </div>
                 </div>
             </div>
+        </div>
+
+        <div class="chat-type-container">
+            <textarea name="in-text" id="in-text"></textarea>
+            <button class="btn">Send</button>
         </div>
     </form>
 
@@ -62,7 +78,41 @@
             background-color: var(--vscode-input-background);
             min-height: 500px;
             max-height: 700px;
+            overflow-y: auto;
             flex: 1;
+            border-radius: 4px;
+            padding: 10px;
+        }
+
+        .chat{
+            width: 100%;
+            margin-bottom: 8px;
+        }
+
+        .chat-right{
+            width: 100%;
+            margin-bottom: 8px;
+            text-align: right;
+        }
+
+        .chat-type-container{
+            width: 100%;
+            margin-top: 8px;
+        }
+
+        textarea{
+            background-color: var(--vscode-input-background);
+            color: var(--vscode-input-foreground);
+            border-color: var(--vscode-input-border, transparent);
+            border-radius: 4px;
+            width: 100%;
+        }
+
+        .btn{
+            margin-top: 8px;
+            color: var(--vscode-button-foreground); background-color: var(--vscode-button-background);
+            width: 100%;
+            border: none;
             border-radius: 4px;
             padding: 10px;
         }
