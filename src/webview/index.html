@@ -4,50 +4,124 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; style-src 'self' 'unsafe-inline';">
     <title>Your Copilot</title>
-    <script src="./YourCopilot.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/showdown@2.1.0/dist/showdown.min.js"></script>
 </head>
 
 <body>
-    <p>Insert your LLM server (we recomend <a href="https://lmstudio.ai/">LM Studio</a> as your LLM server)</p>
+    <details>
+        <summary>Configuration</summary>
+        <div>
+            <p>Insert your LLM server (we recomend <a href="https://lmstudio.ai/">LM Studio</a> as your LLM server)</p>
+            <div class="input-control">
+                <label for="ip" class="label">IP</label>
+                <input type="text" name="ipAddress" id="ipAddress" placeholder="localhost:1234" class="input">
+            </div>
 
-    <form>
-        <div class="input-control">
-            <label for="ip" class="label">IP</label>
-            <input type="text" name="ipAddress" id="ipAddress" placeholder="localhost:1234" class="input">
+            <div class="input-control">
+                <label for="ip" class="label">Token</label>
+                <input type="text" name="token" id="token"
+                    placeholder="Leave blank if you are using your own LLM server" class="input">
+                <small>Only if you are using oficial OpenAI API</small>
+            </div>
         </div>
-        <div class="chat-container">
-            <div class="chat-wrapper">
-                <div class="chat">
-                    <div class="chat-message">
-                        <div class="chat-message-content">
-                            <b>Your Copilot:</b>
-                            <p>Hi, I'm your copilot</p>
-                            <!-- render a markdown text -->
-                        </div>
-                    </div>
-                </div>
-                <div class="chat-right">
-                    <div class="chat-message">
-                        <div class="chat-message-content">
-                            <b>You:</b>
-                            <p>Hello :D</p>
-                            <!-- render a markdown text -->
-                        </div>
+    </details>
+    <br>
+
+    <div class="chat-container">
+        <div class="chat-wrapper" id="chat-wrapper">
+            <div class="chat-right" id="chat-right">
+                <div class="chat-message">
+                    <div class="chat-message-content">
+                        <b>You</b>
+                        <p id="message-element">Hi Copilot!</p>
+                        <!-- render a markdown text -->
                     </div>
                 </div>
             </div>
+            <hr>
+            <div class="chat" id="chat">
+                <div class="chat-message">
+                    <div class="chat-message-content">
+                        <b>Your Copilot</b>
+                        <p id="message-element">Hi, I'm your copilot</p>
+                        <!-- render a markdown text -->
+                    </div>
+                </div>
+            </div>
+            <hr>
         </div>
+    </div>
 
-        <div class="chat-type-container">
-            <textarea name="in-text" id="in-text"></textarea>
-            <button type="button" class="btn" onclick="() => sendMessage()">Send</button>
-        </div>
-    </form>
+    <div class="chat-type-container">
+        <textarea name="in-text" id="in-text" onchange="validateInput()"></textarea>
+        <button type="button" class="btn" id="btn" onclick="sendMessage()" disabled="true">Send</button>
+    </div>
 
     <script>
-        function sendMessage(){
-            alert("Hello");
+        var vscodeContext = acquireVsCodeApi();
+
+        //get the state if exists:
+        var state = vscodeContext.getState();
+        if (state) {
+            document.getElementById('ipAddress').value = state.server;
+        }
+
+        function sendMessage() {
+            var message = document.getElementById('in-text').value;
+            if (message.length == 0) return;
+            updateHtmlChat('right', message);
+            console.log('sendMessage');
+            vscodeContext.postMessage({
+                command: 'your-copilot.send',
+                text: { server: document.getElementById('ipAddress').value, message: message }
+            });
+            // reset the input
+            document.getElementById('in-text').value = "";
+            vscodeContext.setState({ server: document.getElementById('ipAddress').value, token: document.getElementById('token').value})
+        }
+
+        addEventListener('message', event => {
+            var message = event.data;
+            console.log("Message received", message);
+            switch (message.command) {
+                case 'your-copilot.receive':
+                    console.log('receiveMessage from extension');
+                    updateHtmlChat('left', message.text);
+                    return;
+            }
+        });
+
+        function updateHtmlChat(side, message) {
+            if (side == "left") {
+                var chatElem = document.getElementById('chat').cloneNode(true);
+                var n = document.getElementById('chat-wrapper').appendChild(chatElem);
+                var converter = new showdown.Converter()
+                converter.setFlavor('github');
+                var text = message;
+                var html = converter.makeHtml(text);
+                n.querySelector('#message-element').innerHTML = html;
+            }
+            if (side == "right") {
+                var chatElem = document.getElementById('chat-right').cloneNode(true);
+                var n = document.getElementById('chat-wrapper').appendChild(chatElem);
+                n.querySelector('#message-element').innerHTML = message;
+            }
+
+            var objDiv = document.getElementById("chat-wrapper");
+            var hrElem = document.createElement("hr");
+            objDiv.appendChild(hrElem);
+        }
+
+        function validateInput() {
+            var input = document.getElementById('in-text').value;
+            if (input.length > 0) {
+                document.getElementById('btn').disabled = false;
+            } else {
+                document.getElementById('btn').disabled = true;
+            }
         }
     </script>
 
@@ -93,12 +167,12 @@
 
         .chat {
             width: 100%;
-            margin-bottom: 8px;
+            margin-bottom: 16px;
         }
 
         .chat-right {
             width: 100%;
-            margin-bottom: 8px;
+            margin-bottom: 16px;
             text-align: right;
         }
 
@@ -112,7 +186,7 @@
             color: var(--vscode-input-foreground);
             border-color: var(--vscode-input-border, transparent);
             border-radius: 4px;
-            width: 100%;
+            width: -webkit-fill-available;
         }
 
         .btn {
@@ -123,6 +197,13 @@
             border: none;
             border-radius: 4px;
             padding: 10px;
+            cursor: pointer;
+        }
+
+        hr {
+            width: 70%;
+            border: none;
+            border-bottom: solid 1px rgba(255, 255, 255, 0.05);
         }
     </style>
 </body>

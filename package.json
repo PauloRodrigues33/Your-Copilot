@@ -30,7 +30,13 @@
           "type": "webview"
         }
       ]
-    }
+    },
+    "commands": [
+      {
+        "command": "your-copilot.start",
+        "title": "Start Your Copilot"
+      }
+    ]
   },
   "scripts": {
     "vscode:prepublish": "npm run package",
