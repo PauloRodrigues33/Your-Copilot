@@ -27,9 +27,9 @@
                 <small>Only if you are using oficial OpenAI API</small>
             </div>
             <div class="input-control">
-                <label for="stream" class="label">
-                    <input type="checkbox" name="stream" id="stream" class="input">
-                    Stream</label>
+                <label for="stream" class="label-check">
+                    <input type="checkbox" name="stream" id="stream" class="input-check" />Stream
+                </label>
             </div>
         </div>
     </details>
@@ -168,6 +168,9 @@
                                 else {
                                     currentChat.innerHTML = currentChat.innerHTML + msg;
                                 }
+                                isStreaming = false;
+                                chatStreamingElement = null;
+                                console.log('streaming finished inside');
                             }
                             else {
                                 currentChat.innerHTML = currentChat.innerHTML + msg;

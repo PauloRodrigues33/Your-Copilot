@@ -5,9 +5,10 @@ import * as http from 'http';
 import axios from 'axios';
 
 var webview: vscode.Webview;
+var character: string = "My name is 'Your Copilot' and i was developed by 'Paulo Rodrigues'. I'm experienced developer, my answers is given in markdown formatted, you offer code assistance and help in troubleshooting";
 
 export function activate(context: vscode.ExtensionContext) {
-    context.subscriptions.push(vscode.window.registerWebviewViewProvider('your-copilot-view', new YourCopilotWebViewProvider()));
+    context.subscriptions.push(vscode.window.registerWebviewViewProvider('your-copilot-view', new YourCopilotWebViewProvider(), { webviewOptions: { retainContextWhenHidden: true } }));
 }
 
 class YourCopilotWebViewProvider implements vscode.WebviewViewProvider {
@@ -51,7 +52,7 @@ class YourCopilot {
         if (!stream) {
             var response = axios.post(server + '/v1/chat/completions', {
                 "messages": [
-                    { "role": "system", "content": "My name is 'Your Copilot' and i was developed by 'Paulo Rodrigues', You are a highly experienced developer, your answer is given in markdown formatted, you offer code assistance and help in troubleshooting" },
+                    { "role": "system", "content": character },
                     { "role": "user", "content": message }
                 ],
                 "temperature": 0.7,
@@ -69,34 +70,6 @@ class YourCopilot {
                 webview.postMessage({ command: 'your-copilot.receive', text: response.data.choices[0].message?.content });
             });
         } else {
-            // var response = axios.post(server + '/v1/chat/completions', {
-            //     "messages": [
-            //         { "role": "system", "content": "My name is 'Your Copilot' and i was developed by 'Paulo Rodrigues', You are a highly experienced developer, your answer is given in markdown formatted, you offer code assistance and help in troubleshooting" },
-            //         { "role": "user", "content": message }
-            //     ],
-            //     "temperature": 0.7,
-            //     "max_tokens": -1,
-            //     "stream": stream
-            // }, {
-            //     maxBodyLength: Infinity,
-            //     headers: {
-            //         'Content-Type': 'application/json',
-            //         'Authorization': 'Bearer ' + token,
-            //         'responseType': 'stream'
-            //     },
-            // });
-
-            // response.then(function (response) {
-            //     var stream = response.data;
-
-            //     stream.on('data', function (chunk: any) {
-            //         console.log('data: ', chunk.toString());
-            //     });
-
-            //     console.log('data: ', response.data);
-            //     webview.postMessage({ command: 'your-copilot.receive-stream', text: response.data.choices[0] });
-            // });
-
             var options = {
                 'method': 'POST',
                 'hostname': server.split('://')[1].split(':')[0],
@@ -131,7 +104,7 @@ class YourCopilot {
                 "messages": [
                     {
                         "role": "system",
-                        "content": "My name is 'Your Copilot' and i was developed by 'Paulo Rodrigues', You are a highly experienced developer, your answer is given in markdown formatted, you offer code assistance and help in troubleshooting"
+                        "content": character
                     },
                     {
                         "role": "user",
