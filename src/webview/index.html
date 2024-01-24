@@ -11,30 +11,6 @@
 </head>
 
 <body>
-    <details>
-        <summary>Configuration</summary>
-        <div>
-            <p>Insert your LLM server (we recomend <a href="https://lmstudio.ai/">LM Studio</a> as your LLM server)</p>
-            <div class="input-control">
-                <label for="ip" class="label">IP</label>
-                <input type="text" name="ipAddress" id="ipAddress" placeholder="localhost:1234" class="input">
-            </div>
-
-            <div class="input-control">
-                <label for="ip" class="label">Token</label>
-                <input type="text" name="token" id="token"
-                    placeholder="Leave blank if you are using your own LLM server" class="input">
-                <small>Only if you are using oficial OpenAI API</small>
-            </div>
-            <div class="input-control">
-                <label for="stream" class="label-check">
-                    <input type="checkbox" name="stream" id="stream" class="input-check" />Stream
-                </label>
-            </div>
-        </div>
-    </details>
-    <br>
-
     <div class="chat-container">
         <div class="chat-wrapper" id="chat-wrapper">
             <div class="chat-right" id="chat-right">
@@ -62,8 +38,34 @@
 
     <div class="chat-type-container">
         <textarea name="in-text" id="in-text" onchange="validateInput()"></textarea>
-        <button type="button" class="btn" id="btn" onclick="sendMessage()">Send</button>
+        <button type="button" class="btn" id="btn" onclick="sendMessage()" onmouseenter="toggleOnBtnHover()"
+            onmouseleave="toggleOnBtnHover()">Send</button>
+        <div class="error" id="error">Please insert an IP Address in the configuration below.</div>
     </div>
+    <br />
+
+    <details>
+        <summary>Configuration</summary>
+        <div>
+            <p>Insert your LLM server (we recomend <a href="https://lmstudio.ai/">LM Studio</a> as your LLM server)</p>
+            <div class="input-control">
+                <label for="ip" class="label">IP</label>
+                <input type="text" name="ipAddress" id="ipAddress" placeholder="http://localhost:1234" class="input">
+            </div>
+
+            <div class="input-control">
+                <label for="ip" class="label">Token</label>
+                <input type="text" name="token" id="token"
+                    placeholder="Leave blank if you are using your own LLM server" class="input">
+                <small>Only if you are using oficial OpenAI API</small>
+            </div>
+            <div class="input-control">
+                <label for="stream" class="label-check">
+                    <input type="checkbox" name="stream" id="stream" class="input-check" />Stream
+                </label>
+            </div>
+        </div>
+    </details>
 
     <script>
         var vscodeContext = acquireVsCodeApi();
@@ -80,6 +82,24 @@
         }
         catch (e) {
             console.log('error getting state: ', e);
+        }
+
+        function toggleOnBtnHover() {
+            if (!configurationValidated()) {
+                document.getElementById('error').style.display = 'block';
+            }
+            else {
+                document.getElementById('error').style.display = 'none';
+            }
+        }
+
+        function configurationValidated() {
+            var ipAddress = document.getElementById('ipAddress').value;
+            if (ipAddress.length > 0) {
+                return true;
+            } else {
+                return false;
+            }
         }
 
         function validateInput() {
@@ -117,6 +137,11 @@
                 case 'your-copilot.receive-stream':
                     console.log('receiveMessage stream from extension');
                     updateHtmlChat('left', message.text, true);
+                    return;
+
+                case 'your-copilot.error':
+                    console.log('receiveMessage error from extension');
+                    updateHtmlChat('left', `ERROR - Please check if your LLM server is running and the IP Address is correct: ${document.getElementById('ipAddress').value}, if you are using oficial OpenAI API, please check if your token is correct.`);
                     return;
             }
         });
@@ -233,12 +258,22 @@
         .chat {
             width: 100%;
             margin-bottom: 16px;
+            opacity: 0;
+            animation: fadeIn 1s forwards;
+        }
+
+        @keyframes fadeIn {
+            100% {
+                opacity: 1;
+            }
         }
 
         .chat-right {
             width: 100%;
             margin-bottom: 16px;
             text-align: right;
+            opacity: 0;
+            animation: fadeIn 1s forwards;
         }
 
         .chat-type-container {
@@ -265,10 +300,32 @@
             cursor: pointer;
         }
 
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
         hr {
             width: 70%;
             border: none;
             border-bottom: solid 1px rgba(255, 255, 255, 0.05);
+        }
+
+        .error {
+            color: red;
+            padding: 8px;
+            display: none;
+            text-align: center;
+        }
+
+        details {
+            border: solid 1px rgba(255, 255, 255, 0.1);
+            padding: 10px;
+            border-radius: 4px;
+        }
+
+        summary {
+            cursor: pointer;
         }
     </style>
 </body>

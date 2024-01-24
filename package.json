@@ -1,7 +1,11 @@
 {
   "name": "your-copilot",
   "displayName": "Your Copilot",
-  "description": "",
+  "description": "Use your own AI to help you code",
+  "author": {
+    "name": "Paulo Rodrigues",
+    "email": "paulo.robertojr33@gmail.com"
+  },
   "version": "0.0.1",
   "engines": {
     "vscode": "^1.85.0"

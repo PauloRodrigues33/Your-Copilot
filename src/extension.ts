@@ -69,6 +69,10 @@ class YourCopilot {
             response.then(function (response) {
                 webview.postMessage({ command: 'your-copilot.receive', text: response.data.choices[0].message?.content });
             });
+
+            response.catch(function (error) {
+                webview.postMessage({ command: 'your-copilot.error', text: "" });
+            });
         } else {
             var options = {
                 'method': 'POST',
@@ -96,7 +100,8 @@ class YourCopilot {
                 });
 
                 res.on("error", function (error) {
-                    console.error(error);
+                    console.error(`Error when streaming: ` + error);
+                    webview.postMessage({ command: 'your-copilot.error', text: "" });
                 });
             });
 
