@@ -26,6 +26,11 @@
                     placeholder="Leave blank if you are using your own LLM server" class="input">
                 <small>Only if you are using oficial OpenAI API</small>
             </div>
+            <div class="input-control">
+                <label for="stream" class="label">
+                    <input type="checkbox" name="stream" id="stream" class="input">
+                    Stream</label>
+            </div>
         </div>
     </details>
     <br>
@@ -57,16 +62,33 @@
 
     <div class="chat-type-container">
         <textarea name="in-text" id="in-text" onchange="validateInput()"></textarea>
-        <button type="button" class="btn" id="btn" onclick="sendMessage()" disabled="true">Send</button>
+        <button type="button" class="btn" id="btn" onclick="sendMessage()">Send</button>
     </div>
 
     <script>
         var vscodeContext = acquireVsCodeApi();
+        console.log('Main script loaded');
 
-        //get the state if exists:
-        var state = vscodeContext.getState();
-        if (state) {
-            document.getElementById('ipAddress').value = state.server;
+        try {
+            //get the state if exists:
+            var state = vscodeContext.getState();
+            if (state) {
+                document.getElementById('ipAddress').value = state.server;
+                document.getElementById('token').value = state.token;
+                document.getElementById('stream').checked = state.stream;
+            }
+        }
+        catch (e) {
+            console.log('error getting state: ', e);
+        }
+
+        function validateInput() {
+            var input = document.getElementById('in-text').value;
+            if (input.length > 0) {
+                document.getElementById('btn').disabled = false;
+            } else {
+                document.getElementById('btn').disabled = true;
+            }
         }
 
         function sendMessage() {
@@ -76,11 +98,11 @@
             console.log('sendMessage');
             vscodeContext.postMessage({
                 command: 'your-copilot.send',
-                text: { server: document.getElementById('ipAddress').value, message: message }
+                text: { server: document.getElementById('ipAddress').value, message: message, token: document.getElementById('token').value, stream: document.getElementById('stream').checked }
             });
             // reset the input
             document.getElementById('in-text').value = "";
-            vscodeContext.setState({ server: document.getElementById('ipAddress').value, token: document.getElementById('token').value})
+            vscodeContext.setState({ server: document.getElementById('ipAddress').value, token: document.getElementById('token').value, stream: document.getElementById('stream').checked })
         }
 
         addEventListener('message', event => {
@@ -91,36 +113,76 @@
                     console.log('receiveMessage from extension');
                     updateHtmlChat('left', message.text);
                     return;
+
+                case 'your-copilot.receive-stream':
+                    console.log('receiveMessage stream from extension');
+                    updateHtmlChat('left', message.text, true);
+                    return;
             }
         });
 
-        function updateHtmlChat(side, message) {
+
+        var isStreaming = false;
+        var chatStreamingElement = null;
+        var originalChat = document.getElementById('chat');
+        var converter = new showdown.Converter()
+        converter.setFlavor('github');
+
+        function updateHtmlChat(side, message, stream = false) {
             if (side == "left") {
-                var chatElem = document.getElementById('chat').cloneNode(true);
-                var n = document.getElementById('chat-wrapper').appendChild(chatElem);
-                var converter = new showdown.Converter()
-                converter.setFlavor('github');
-                var text = message;
-                var html = converter.makeHtml(text);
-                n.querySelector('#message-element').innerHTML = html;
+                var chatElem = originalChat.cloneNode(true);
+                if (!stream) {
+                    var n = document.getElementById('chat-wrapper').appendChild(chatElem);
+                    var html = converter.makeHtml(message);
+                    n.querySelector('#message-element').innerHTML = html;
+                    var objDiv = document.getElementById("chat-wrapper");
+                    var hrElem = document.createElement("hr");
+                    objDiv.appendChild(hrElem);
+                }
+                else {
+                    if (!isStreaming) {
+                        chatElem = originalChat.cloneNode(true);
+                        chatElem.style.display = 'block';
+                        var chatElemDOM = document.getElementById('chat-wrapper').appendChild(chatElem);
+                        chatStreamingElement = chatElemDOM.querySelector('#message-element');
+                        chatStreamingElement.id = '#message-element' + message.id
+                        chatStreamingElement.innerHTML = message?.choices[0]?.delta?.content;
+                        isStreaming = true;
+                        console.log('streaming started');
+                    }
+                    else {
+                        if (message.finish_reason != null) {
+                            isStreaming = false;
+                            chatStreamingElement = null;
+                            console.log('streaming finished');
+                        }
+                        else {
+                            console.log('trying to find id: ', '#message-element' + message.id);
+                            var currentChat = document.getElementById('#message-element' + message.id);
+                            console.log('current chat found: ', currentChat)
+                            var msg = message?.choices[0]?.delta?.content ? message?.choices[0]?.delta?.content : '';
+                            if (message?.choices[0]?.finish_reason != null) {
+                                if (converter) {
+                                    currentChat.innerHTML = converter.makeHtml(currentChat.innerHTML);
+                                }
+                                else {
+                                    currentChat.innerHTML = currentChat.innerHTML + msg;
+                                }
+                            }
+                            else {
+                                currentChat.innerHTML = currentChat.innerHTML + msg;
+                            }
+                        }
+                    }
+                }
             }
             if (side == "right") {
                 var chatElem = document.getElementById('chat-right').cloneNode(true);
                 var n = document.getElementById('chat-wrapper').appendChild(chatElem);
                 n.querySelector('#message-element').innerHTML = message;
-            }
-
-            var objDiv = document.getElementById("chat-wrapper");
-            var hrElem = document.createElement("hr");
-            objDiv.appendChild(hrElem);
-        }
-
-        function validateInput() {
-            var input = document.getElementById('in-text').value;
-            if (input.length > 0) {
-                document.getElementById('btn').disabled = false;
-            } else {
-                document.getElementById('btn').disabled = true;
+                var objDiv = document.getElementById("chat-wrapper");
+                var hrElem = document.createElement("hr");
+                objDiv.appendChild(hrElem);
             }
         }
     </script>
