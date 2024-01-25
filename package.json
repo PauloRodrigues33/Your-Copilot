@@ -40,7 +40,7 @@
         {
           "id": "your-copilot",
           "title": "Your Copilot",
-          "icon": "./src/static/icon-your-copilot.svg"
+          "icon": "./src/static/icon-your-copilot.png"
         }
       ]
     },
@@ -50,7 +50,7 @@
           "id": "your-copilot-view",
           "name": "Your Copilot",
           "type": "webview",
-          "icon": "./src/static/icon-your-copilot.svg"
+          "icon": "./src/static/icon-your-copilot.png"
         }
       ]
     },
