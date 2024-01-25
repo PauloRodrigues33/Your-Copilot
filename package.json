@@ -3,15 +3,33 @@
   "displayName": "Your Copilot",
   "description": "Use your own AI to help you code",
   "author": {
-    "name": "Paulo Rodrigues",
+    "name": "PauloRodrigues",
     "email": "paulo.robertojr33@gmail.com"
   },
+  "icon": "images/icon-your-copilot.png",
   "version": "0.0.1",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/PauloRodrigues33/Your-Copilot"
+  },
+  "publisher": "PauloRodrigues",
   "engines": {
     "vscode": "^1.85.0"
   },
   "categories": [
+    "Machine Learning",
+    "Programming Languages",
     "Other"
+  ],
+  "keywords": [
+    "machine learning",
+    "programming languages",
+    "other",
+    "ai",
+    "artificial intelligence",
+    "code",
+    "coding",
+    "copilot"
   ],
   "activationEvents": [],
   "main": "./dist/extension.js",
@@ -22,7 +40,7 @@
         {
           "id": "your-copilot",
           "title": "Your Copilot",
-          "icon": "src/static/icon-your-copilot.svg"
+          "icon": "./src/static/icon-your-copilot.svg"
         }
       ]
     },
@@ -69,6 +87,7 @@
     "webpack-cli": "^5.1.4"
   },
   "dependencies": {
+    "@vscode/vsce": "^2.22.0",
     "axios": "^1.6.5"
   }
 }

@@ -5,7 +5,7 @@ import * as http from 'http';
 import axios from 'axios';
 
 var webview: vscode.Webview;
-var character: string = "My name is 'Your Copilot' and i was developed by 'Paulo Rodrigues'. I'm experienced developer, my answers is given in markdown formatted, you offer code assistance and help in troubleshooting";
+var character: string = "My name is 'Your Copilot' and i was developed by 'Paulo Rodrigues'. I'm experienced developer, my answers and code examples are in markdown formatted, offer code assistance and help in troubleshooting in code languages, i can write tests and fix code.";
 
 export function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(vscode.window.registerWebviewViewProvider('your-copilot-view', new YourCopilotWebViewProvider(), { webviewOptions: { retainContextWhenHidden: true } }));
