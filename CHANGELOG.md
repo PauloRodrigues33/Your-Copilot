@@ -1,9 +1,13 @@
 # Change Log
 
-All notable changes to the "your-copilot" extension will be documented in this file.
+## [0.0.3] 2024-01-25
 
-Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
+- Improved icons.
 
-## [Unreleased]
+## [0.0.2] 2024-01-24
 
-- Initial release
+- Fixes and improved system message.
+
+## [0.0.1] 2024-01-24
+
+- Initial release.
