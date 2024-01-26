@@ -12,9 +12,6 @@
   },
   "icon": "images/icon-your-copilot.png",
   "version": "0.0.5",
-  "enabledApiProposals": [
-    "inlineCompletionsAdditions"
-  ],
   "repository": {
     "type": "git",
     "url": "https://github.com/PauloRodrigues33/Your-Copilot"
