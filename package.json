@@ -11,7 +11,7 @@
     "email": "paulo.robertojr33@gmail.com"
   },
   "icon": "images/icon-your-copilot.png",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "enabledApiProposals": [
     "inlineCompletionsAdditions"
   ],
