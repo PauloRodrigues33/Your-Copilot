@@ -2,6 +2,10 @@
   "name": "your-copilot",
   "displayName": "Your Copilot",
   "description": "Use your own AI to help you code",
+  "extensionKind": [
+    "ui",
+    "workspace"
+  ],
   "author": {
     "name": "PauloRodrigues",
     "email": "paulo.robertojr33@gmail.com"
@@ -43,7 +47,7 @@
         {
           "id": "your-copilot",
           "title": "Your Copilot",
-          "icon": "./src/static/icon-your-copilot.png"
+          "icon": "images/icon-your-copilot-icon.png"
         }
       ]
     },
@@ -52,17 +56,10 @@
         {
           "id": "your-copilot-view",
           "name": "Your Copilot",
-          "type": "webview",
-          "icon": "./src/static/icon-your-copilot.png"
+          "type": "webview"
         }
       ]
-    },
-    "commands": [
-      {
-        "command": "your-copilot.start",
-        "title": "Start Your Copilot"
-      }
-    ]
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run package",
@@ -84,6 +81,7 @@
     "@vscode/dts": "^0.4.0",
     "@vscode/test-cli": "^0.0.4",
     "@vscode/test-electron": "^2.3.8",
+    "@vscode/vsce": "^2.23.0",
     "copy-webpack-plugin": "^12.0.2",
     "eslint": "^8.56.0",
     "ts-loader": "^9.5.1",
@@ -92,7 +90,6 @@
     "webpack-cli": "^5.1.4"
   },
   "dependencies": {
-    "@vscode/vsce": "^2.22.0",
     "axios": "^1.6.5"
   }
 }
