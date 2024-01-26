@@ -1,5 +1,8 @@
 # Change Log
 
+## [0.0.7] 2024-01-26
+- Disabled inline completion to fix bugs.
+
 ## [0.0.6] 2024-01-26
 - fix: Activity icon now showing
 

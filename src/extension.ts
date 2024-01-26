@@ -11,7 +11,7 @@ var _context: vscode.ExtensionContext;
 export function activate(context: vscode.ExtensionContext) {
     _context = context;
     // use the inline completion provider
-    context.subscriptions.push(vscode.languages.registerInlineCompletionItemProvider({ scheme: 'file' }, new InlineCompletionItemProvider()));
+    //context.subscriptions.push(vscode.languages.registerInlineCompletionItemProvider({ scheme: 'file' }, new InlineCompletionItemProvider()));
     context.subscriptions.push(vscode.window.registerWebviewViewProvider('your-copilot-view', new YourCopilotWebViewProvider(), { webviewOptions: { retainContextWhenHidden: true } }));
 }
 
