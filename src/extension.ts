@@ -70,7 +70,8 @@ class YourCopilot {
                     { "role": "user", "content": message }
                 ],
                 "temperature": 0.7,
-                "max_tokens": -1,
+                "max_tokens": 128,
+                "model": 'gpt-3.5-turbo', //if you want to use the openai api.
                 "stream": stream
             }, {
                 maxBodyLength: Infinity,
@@ -85,6 +86,16 @@ class YourCopilot {
             });
 
             response.catch(function (error) {
+                //show an vscode extension error message
+                console.error(`Error when sending message: ` + error);
+                // show an alert to the user error.response.data.error.message
+                if (server.indexOf('api.openai.com') > -1) {
+                    vscode.window.showErrorMessage('Your-Copilot - Error when sending message - ' + error.message + " | " + error.response?.data?.error?.message, 'Dismiss');
+                }
+                else {
+                    vscode.window.showErrorMessage('Your-Copilot - Error when sending message - ' + error.message, 'Dismiss');
+                }
+
                 webview.postMessage({ command: 'your-copilot.error', text: "" });
             });
         } else {

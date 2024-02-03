@@ -55,7 +55,7 @@
 
             <div class="input-control">
                 <label for="ip" class="label">Token</label>
-                <input type="text" name="token" id="token"
+                <input type="password" name="token" id="token"
                     placeholder="Leave blank if you are using your own LLM server" class="input">
                 <small>Only if you are using oficial OpenAI API</small>
             </div>
@@ -141,7 +141,7 @@
 
                 case 'your-copilot.error':
                     console.log('receiveMessage error from extension');
-                    updateHtmlChat('left', `ERROR - Please check if your LLM server is running and the IP Address is correct: ${document.getElementById('ipAddress').value}, if you are using oficial OpenAI API, please check if your token is correct.`);
+                    updateHtmlChat('left', `ERROR - Please check if your LLM server is running and the IP Address is correct: ${document.getElementById('ipAddress').value}, if you are using oficial OpenAI API, please check if your token is correct or if you have exceeded quota.`);
                     return;
             }
         });
