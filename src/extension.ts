@@ -106,12 +106,6 @@ class GlobalState {
             this.messageHistory = this.messageHistory.slice(-(settings.maxContextMessages - 1)); // Keep space for system message
             this.messageHistory.unshift(systemMessage!); // Add system message back at the start
         }
-
-        console.log('Message history updated:', {
-            historyLength: this.messageHistory.length,
-            firstMessage: this.messageHistory[0]?.role,
-            lastMessage: this.messageHistory[this.messageHistory.length - 1]?.role
-        });
     }
 
     getMessageHistory(): Message[] {
@@ -124,7 +118,6 @@ class GlobalState {
 
     clearMessageHistory() {
         this.messageHistory = [this.systemMessage];
-        console.log('Message history cleared, system message restored');
     }
 
     getSettings(): Settings {
@@ -326,11 +319,6 @@ class YourCopilot {
         }
 
         try {
-            console.log('Processing message:', {
-                isStream: messageData.stream,
-                messageLength: messageData.message.length
-            });
-
             // Add user message to history
             state.addMessage({ role: 'user', content: messageData.message });
 
@@ -339,10 +327,6 @@ class YourCopilot {
                 const assistantMessage = response.data.choices[0].message?.content;
                 
                 if (assistantMessage) {
-                    console.log('Received non-streaming response:', {
-                        messageLength: assistantMessage.length
-                    });
-                    
                     // Add assistant response to history
                     state.addMessage({ role: 'assistant', content: assistantMessage });
                     
@@ -373,12 +357,6 @@ class YourCopilot {
     private static async sendNonStreamingMessage(messageData: { server: string; message: string; token?: string }) {
         const state = GlobalState.getInstance();
         const messages = state.getMessageHistory();
-        
-        console.log('Sending message with history:', {
-            historyLength: messages.length,
-            firstMessage: messages[0]?.role,
-            hasSystemMessage: messages.some(m => m.role === 'system')
-        });
 
         return await axios.post(
             `${messageData.server}/v1/chat/completions`,
@@ -405,12 +383,6 @@ class YourCopilot {
         if (!webview) return;
 
         const messages = state.getMessageHistory();
-        console.log('Sending streaming message with history:', {
-            historyLength: messages.length,
-            firstMessage: messages[0]?.role,
-            hasSystemMessage: messages.some(m => m.role === 'system')
-        });
-
         const [hostname, port] = messageData.server.split('://')[1].split(':');
         const options = {
             method: 'POST',
@@ -449,10 +421,6 @@ class YourCopilot {
             });
 
             res.on("end", () => {
-                console.log('Stream ended:', {
-                    messageLength: fullMessage.length
-                });
-                
                 if (fullMessage) {
                     state.addMessage({ role: 'assistant', content: fullMessage });
                     webview.postMessage({

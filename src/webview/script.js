@@ -7,15 +7,12 @@ converter.setFlavor('github');
 // Add message event listener
 window.addEventListener('message', event => {
     const message = event.data;
-    console.log('Received message:', message);
     
     switch (message.command) {
         case 'your-copilot.receive':
-            console.log('Updating chat with non-stream message:', message.text);
             updateHtmlChat('left', message.text);
             break;
         case 'your-copilot.receive-stream':
-            console.log('Updating chat with stream message:', message.text);
             updateHtmlChat('left', message.text, true);
             break;
         case 'your-copilot.file-list':
@@ -26,7 +23,6 @@ window.addEventListener('message', event => {
             updateReferencedFiles();
             break;
         case 'your-copilot.active-file':
-            console.log('Active file changed:', message);
             handleActiveFileChange(message.text, message.content);
             break;
         case 'your-copilot.error':
@@ -45,7 +41,7 @@ try {
     }
 }
 catch (e) {
-    console.log('error getting state: ', e);
+    console.error('Error getting state:', e);
 }
 
 function toggleOnBtnHover() {
@@ -348,13 +344,6 @@ function sendMessage() {
 
     // Show original message in chat (without file contents)
     updateHtmlChat('right', message);
-
-    console.log('Sending message:', {
-        originalMessage: message,
-        finalMessage: finalMessage,
-        hasFileReferences: hasFileReferences,
-        fileRefs: fileRefs.map(f => ({ ref: f.ref, path: f.path }))
-    });
 
     // Ensure the chat elements are visible
     document.getElementById('chat').style.display = 'block';
