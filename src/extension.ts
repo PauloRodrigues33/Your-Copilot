@@ -61,8 +61,12 @@ class GlobalState {
     private webview: vscode.Webview | undefined;
     private context: vscode.ExtensionContext | undefined;
     private messageHistory: Message[] = [];
+    private systemMessage: Message;
 
-    private constructor() { }
+    private constructor() {
+        this.systemMessage = { role: 'system', content: DEFAULT_CHARACTER };
+        this.messageHistory = [this.systemMessage];
+    }
 
     static getInstance(): GlobalState {
         if (!GlobalState.instance) {
@@ -88,25 +92,39 @@ class GlobalState {
     }
 
     addMessage(message: Message) {
+        // Ensure system message is always first
+        if (this.messageHistory[0]?.role !== 'system') {
+            this.messageHistory.unshift(this.systemMessage);
+        }
+
         this.messageHistory.push(message);
+        
+        // Trim history while preserving system message
         const settings = this.getSettings();
         if (this.messageHistory.length > settings.maxContextMessages) {
-            // Remove oldest messages but keep the system message
-            const systemMessage = this.messageHistory.find(m => m.role === 'system');
-            this.messageHistory = this.messageHistory.slice(-settings.maxContextMessages);
-            if (systemMessage && !this.messageHistory.includes(systemMessage)) {
-                this.messageHistory.unshift(systemMessage);
-            }
+            const systemMessage = this.messageHistory.shift(); // Remove and store system message
+            this.messageHistory = this.messageHistory.slice(-(settings.maxContextMessages - 1)); // Keep space for system message
+            this.messageHistory.unshift(systemMessage!); // Add system message back at the start
         }
+
+        console.log('Message history updated:', {
+            historyLength: this.messageHistory.length,
+            firstMessage: this.messageHistory[0]?.role,
+            lastMessage: this.messageHistory[this.messageHistory.length - 1]?.role
+        });
     }
 
     getMessageHistory(): Message[] {
+        // Ensure system message is present and first
+        if (this.messageHistory.length === 0 || this.messageHistory[0]?.role !== 'system') {
+            this.messageHistory.unshift(this.systemMessage);
+        }
         return this.messageHistory;
     }
 
     clearMessageHistory() {
-        this.messageHistory = [];
-        this.addMessage({ role: 'system', content: DEFAULT_CHARACTER });
+        this.messageHistory = [this.systemMessage];
+        console.log('Message history cleared, system message restored');
     }
 
     getSettings(): Settings {
@@ -144,10 +162,12 @@ export function activate(context: vscode.ExtensionContext) {
     state.setContext(context);
     state.clearMessageHistory(); // Initialize with system message
 
+    let webviewProvider = new YourCopilotWebViewProvider();
+
     context.subscriptions.push(
         vscode.window.registerWebviewViewProvider(
             'your-copilot-view',
-            new YourCopilotWebViewProvider(),
+            webviewProvider,
             { webviewOptions: { retainContextWhenHidden: true } }
         )
     );
@@ -155,38 +175,48 @@ export function activate(context: vscode.ExtensionContext) {
     // Listen for active editor changes
     context.subscriptions.push(
         vscode.window.onDidChangeActiveTextEditor(editor => {
-            if (editor && state.getWebview()) {
-                const relativePath = vscode.workspace.asRelativePath(editor.document.uri);
-                const content = editor.document.getText();
-                state.getWebview()?.postMessage({
-                    command: 'your-copilot.active-file',
-                    text: relativePath,
-                    content: content
-                });
+            if (editor) {
+                const state = GlobalState.getInstance();
+                const webview = state.getWebview();
+                
+                if (webview) {
+                    try {
+                        // Ignore some file types that shouldn't be referenced
+                        const ignoredExtensions = ['.git', '.pdf', '.jpg', '.png', '.ico'];
+                        const filePath = editor.document.uri.fsPath;
+                        if (ignoredExtensions.some(ext => filePath.endsWith(ext))) {
+                            return;
+                        }
+
+                        const relativePath = vscode.workspace.asRelativePath(editor.document.uri);
+                        const content = editor.document.getText();
+                        
+                        console.log('Sending active file update:', relativePath);
+                        
+                        webview.postMessage({
+                            command: 'your-copilot.active-file',
+                            text: relativePath,
+                            content: content
+                        });
+                    } catch (error) {
+                        console.error('Error sending active file update:', error);
+                    }
+                }
             }
         })
     );
-
-    // Send initial active editor if exists
-    const activeEditor = vscode.window.activeTextEditor;
-    if (activeEditor && state.getWebview()) {
-        const relativePath = vscode.workspace.asRelativePath(activeEditor.document.uri);
-        const content = activeEditor.document.getText();
-        state.getWebview()?.postMessage({
-            command: 'your-copilot.active-file',
-            text: relativePath,
-            content: content
-        });
-    }
 }
 
 // WebView Provider
 class YourCopilotWebViewProvider implements vscode.WebviewViewProvider {
+    private _view?: vscode.WebviewView;
+
     resolveWebviewView(
         webviewView: vscode.WebviewView,
         context: vscode.WebviewViewResolveContext<unknown>,
         token: vscode.CancellationToken
     ): void | Thenable<void> {
+        this._view = webviewView;
         const state = GlobalState.getInstance();
         state.setWebview(webviewView.webview);
 
@@ -232,6 +262,25 @@ class YourCopilotWebViewProvider implements vscode.WebviewViewProvider {
             },
             undefined
         );
+
+        // Send initial active editor if exists
+        const activeEditor = vscode.window.activeTextEditor;
+        if (activeEditor) {
+            try {
+                const relativePath = vscode.workspace.asRelativePath(activeEditor.document.uri);
+                const content = activeEditor.document.getText();
+                
+                console.log('Sending initial active file:', relativePath);
+                
+                webviewView.webview.postMessage({
+                    command: 'your-copilot.active-file',
+                    text: relativePath,
+                    content: content
+                });
+            } catch (error) {
+                console.error('Error sending initial active file:', error);
+            }
+        }
     }
 
     private getWebviewContent(extensionUri: vscode.Uri): string {
@@ -271,34 +320,70 @@ class YourCopilot {
     static async sendMessage(messageData: { server: string; message: string; token?: string; stream: boolean }) {
         const state = GlobalState.getInstance();
         const webview = state.getWebview();
-        if (!webview) return;
-
-        // Add user message to history
-        state.addMessage({ role: 'user', content: messageData.message });
+        if (!webview) {
+            console.error('Webview not available');
+            return;
+        }
 
         try {
+            console.log('Processing message:', {
+                isStream: messageData.stream,
+                messageLength: messageData.message.length
+            });
+
+            // Add user message to history
+            state.addMessage({ role: 'user', content: messageData.message });
+
             if (!messageData.stream) {
                 const response = await this.sendNonStreamingMessage(messageData);
                 const assistantMessage = response.data.choices[0].message?.content;
                 
-                // Add assistant response to history
-                state.addMessage({ role: 'assistant', content: assistantMessage });
-                
-                webview.postMessage({ command: 'your-copilot.receive', text: assistantMessage });
+                if (assistantMessage) {
+                    console.log('Received non-streaming response:', {
+                        messageLength: assistantMessage.length
+                    });
+                    
+                    // Add assistant response to history
+                    state.addMessage({ role: 'assistant', content: assistantMessage });
+                    
+                    // Send message to webview
+                    webview.postMessage({
+                        command: 'your-copilot.receive',
+                        text: assistantMessage
+                    });
+                } else {
+                    console.error('Empty response from API');
+                    webview.postMessage({
+                        command: 'your-copilot.error',
+                        text: 'Empty response from API'
+                    });
+                }
             } else {
                 await this.sendStreamingMessage(messageData);
             }
         } catch (error: any) {
             this.handleError(error, messageData.server, webview);
+            // Restore system message if there was an error
+            if (state.getMessageHistory()[0]?.role !== 'system') {
+                state.clearMessageHistory();
+            }
         }
     }
 
     private static async sendNonStreamingMessage(messageData: { server: string; message: string; token?: string }) {
         const state = GlobalState.getInstance();
+        const messages = state.getMessageHistory();
+        
+        console.log('Sending message with history:', {
+            historyLength: messages.length,
+            firstMessage: messages[0]?.role,
+            hasSystemMessage: messages.some(m => m.role === 'system')
+        });
+
         return await axios.post(
             `${messageData.server}/v1/chat/completions`,
             {
-                messages: state.getMessageHistory(),
+                messages: messages,
                 temperature: 0.7,
                 max_tokens: 128,
                 model: 'gpt-3.5-turbo',
@@ -319,6 +404,13 @@ class YourCopilot {
         const webview = state.getWebview();
         if (!webview) return;
 
+        const messages = state.getMessageHistory();
+        console.log('Sending streaming message with history:', {
+            historyLength: messages.length,
+            firstMessage: messages[0]?.role,
+            hasSystemMessage: messages.some(m => m.role === 'system')
+        });
+
         const [hostname, port] = messageData.server.split('://')[1].split(':');
         const options = {
             method: 'POST',
@@ -329,35 +421,74 @@ class YourCopilot {
             maxRedirects: 20
         };
 
-        const req = http.request(options, (res) => {
-            let assistantMessage = '';
+        let streamId = Date.now().toString();
+        let fullMessage = '';
 
+        const req = http.request(options, (res) => {
             res.on("data", (chunk) => {
                 try {
-                    if (chunk.toString() !== 'data: [DONE]') {
-                        const jsonChunk = JSON.parse(chunk.toString().split('data: ')[1]);
-                        assistantMessage += jsonChunk.choices[0]?.delta?.content || '';
-                        webview.postMessage({ command: 'your-copilot.receive-stream', text: jsonChunk });
+                    const chunkStr = chunk.toString();
+                    if (chunkStr !== 'data: [DONE]' && chunkStr.startsWith('data: ')) {
+                        const jsonChunk = JSON.parse(chunkStr.slice(6)); // Remove 'data: ' prefix
+                        const content = jsonChunk.choices[0]?.delta?.content || '';
+                        
+                        if (content) {
+                            fullMessage += content;
+                            webview.postMessage({
+                                command: 'your-copilot.receive-stream',
+                                text: {
+                                    ...jsonChunk,
+                                    id: streamId
+                                }
+                            });
+                        }
                     }
                 } catch (e) {
-                    console.log('Your-Copilot - Error while trying to convert chunks to data', e);
+                    console.error('Error processing stream chunk:', e);
                 }
             });
 
             res.on("end", () => {
-                if (assistantMessage) {
-                    state.addMessage({ role: 'assistant', content: assistantMessage });
+                console.log('Stream ended:', {
+                    messageLength: fullMessage.length
+                });
+                
+                if (fullMessage) {
+                    state.addMessage({ role: 'assistant', content: fullMessage });
+                    webview.postMessage({
+                        command: 'your-copilot.receive-stream',
+                        text: {
+                            id: streamId,
+                            finish_reason: 'stop'
+                        }
+                    });
                 }
             });
 
             res.on("error", (error) => {
-                console.error(`Error when streaming: ${error}`);
-                webview.postMessage({ command: 'your-copilot.error', text: "" });
+                console.error('Stream error:', error);
+                webview.postMessage({
+                    command: 'your-copilot.error',
+                    text: error.message
+                });
+                
+                // Restore system message if there was an error
+                if (state.getMessageHistory()[0]?.role !== 'system') {
+                    state.clearMessageHistory();
+                }
+            });
+        });
+
+        req.on('error', (error) => {
+            console.error('Request error:', error);
+            webview.postMessage({
+                command: 'your-copilot.error',
+                text: error.message
             });
         });
 
         req.write(JSON.stringify({
-            messages: state.getMessageHistory(),
+            messages: messages,
             temperature: 0.7,
             max_tokens: -1,
             stream: true
