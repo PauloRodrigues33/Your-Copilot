@@ -5,39 +5,57 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Content-Security-Policy"
-        content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; style-src 'self' 'unsafe-inline';">
+        content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; style-src 'self' https://cdn.jsdelivr.net 'unsafe-inline';">
     <title>Your Copilot</title>
     <script src="https://cdn.jsdelivr.net/npm/showdown@2.1.0/dist/showdown.min.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet" />
+    <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-typescript.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-javascript.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-json.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-markdown.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-python.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-jsx.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-tsx.min.js"></script>
 </head>
 
 <body>
     <div class="chat-container">
         <div class="chat-wrapper" id="chat-wrapper">
-            <div class="chat-right" id="chat-right">
-                <div class="chat-message">
-                    <div class="chat-message-content">
-                        <b>You</b>
+            <div class="chat-message user-message" id="chat-right">
+                <div class="message-content">
+                    <div class="message-header">
+                        <span class="avatar">You</span>
+                        <span class="message-time"></span>
+                    </div>
+                    <div class="message-body">
                         <p id="message-element">Hi Copilot!</p>
-                        <!-- render a markdown text -->
                     </div>
                 </div>
             </div>
-            <hr>
-            <div class="chat" id="chat">
-                <div class="chat-message">
-                    <div class="chat-message-content">
-                        <b>Your Copilot</b>
+            <div class="chat-message assistant-message" id="chat">
+                <div class="message-content">
+                    <div class="message-header">
+                        <div class="avatar-container">
+                            <span class="avatar-icon">🤖</span>
+                            <span class="avatar">AI</span>
+                        </div>
+                        <span class="message-time"></span>
+                    </div>
+                    <div class="message-body">
                         <p id="message-element">Hi, I'm your copilot</p>
-                        <!-- render a markdown text -->
                     </div>
                 </div>
             </div>
-            <hr>
         </div>
     </div>
 
     <div class="chat-type-container">
-        <textarea name="in-text" id="in-text" onchange="validateInput()"></textarea>
+        <div class="referenced-files" id="referenced-files"></div>
+        <div class="textarea-container">
+            <textarea name="in-text" id="in-text" onchange="validateInput()" onkeydown="handleKeyPress(event)" oninput="handleInput(event)"></textarea>
+            <div id="file-dropdown" class="file-dropdown"></div>
+        </div>
         <button type="button" class="btn" id="btn" onclick="sendMessage()" onmouseenter="toggleOnBtnHover()"
             onmouseleave="toggleOnBtnHover()">Send</button>
         <div class="error" id="error">Please insert an IP Address in the configuration below.</div>
@@ -111,18 +129,225 @@
             }
         }
 
+        var lastAtPosition = -1;
+        var selectedFileIndex = -1;
+        var fileList = [];
+        var referencedFiles = new Map(); // Map to store file references: path -> content
+
+        function handleInput(event) {
+            const textarea = event.target;
+            const text = textarea.value;
+            const cursorPosition = textarea.selectionStart;
+            
+            // Find the last @ before the cursor
+            const beforeCursor = text.substring(0, cursorPosition);
+            const afterCursor = text.substring(cursorPosition);
+            
+            // Find the word being typed after the last @
+            const lastAtIndex = beforeCursor.lastIndexOf('@');
+            if (lastAtIndex === -1) {
+                hideFileDropdown();
+                return;
+            }
+
+            // Get the text between the last @ and the cursor
+            const currentWord = beforeCursor.slice(lastAtIndex + 1);
+            
+            // Check if we're actually in a file reference context
+            // If there's a space or newline in the current word, we're not
+            if (/[\s\n]/.test(currentWord)) {
+                hideFileDropdown();
+                return;
+            }
+
+            // Only search if we have at least one character after @
+            if (currentWord.length > 0) {
+                lastAtPosition = lastAtIndex;
+                vscodeContext.postMessage({
+                    command: 'your-copilot.search-files',
+                    text: currentWord
+                });
+            } else {
+                hideFileDropdown();
+            }
+        }
+
+        function handleKeyPress(event) {
+            const dropdown = document.getElementById('file-dropdown');
+            
+            if (dropdown.style.display === 'block') {
+                switch (event.key) {
+                    case 'ArrowDown':
+                        event.preventDefault();
+                        selectedFileIndex = Math.min(selectedFileIndex + 1, fileList.length - 1);
+                        updateFileSelection();
+                        break;
+                    case 'ArrowUp':
+                        event.preventDefault();
+                        selectedFileIndex = Math.max(selectedFileIndex - 1, 0);
+                        updateFileSelection();
+                        break;
+                    case 'Enter':
+                        if (selectedFileIndex !== -1) {
+                            event.preventDefault();
+                            selectFile(fileList[selectedFileIndex]);
+                        }
+                        break;
+                    case 'Escape':
+                    case 'Tab':
+                        event.preventDefault();
+                        hideFileDropdown();
+                        break;
+                }
+            } else if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                if (document.getElementById('in-text').value.trim() && configurationValidated()) {
+                    sendMessage();
+                }
+            }
+        }
+
+        function updateFileSelection() {
+            const items = document.querySelectorAll('.file-item');
+            items.forEach((item, index) => {
+                if (index === selectedFileIndex) {
+                    item.classList.add('selected');
+                } else {
+                    item.classList.remove('selected');
+                }
+            });
+        }
+
+        function showFileDropdown(files) {
+            const dropdown = document.getElementById('file-dropdown');
+            fileList = files;
+            selectedFileIndex = files.length > 0 ? 0 : -1;
+            
+            dropdown.innerHTML = '';
+            if (files.length === 0) {
+                const item = document.createElement('div');
+                item.className = 'file-item no-results';
+                item.textContent = 'No files found';
+                dropdown.appendChild(item);
+            } else {
+                files.forEach((file, index) => {
+                    const item = document.createElement('div');
+                    item.className = 'file-item' + (index === 0 ? ' selected' : '');
+                    item.textContent = file;
+                    item.onclick = () => selectFile(file);
+                    dropdown.appendChild(item);
+                });
+            }
+            
+            dropdown.style.display = 'block';
+        }
+
+        function hideFileDropdown() {
+            const dropdown = document.getElementById('file-dropdown');
+            dropdown.style.display = 'none';
+            lastAtPosition = -1;
+            selectedFileIndex = -1;
+            fileList = [];
+        }
+
+        function selectFile(file) {
+            const textarea = document.getElementById('in-text');
+            const text = textarea.value;
+            
+            // Get the text before and after the current file reference
+            const beforeAt = text.substring(0, lastAtPosition);
+            const afterCursor = text.substring(textarea.selectionStart);
+            
+            // Request file content
+            vscodeContext.postMessage({
+                command: 'your-copilot.get-file-content',
+                text: file
+            });
+            
+            // Update textarea with file reference and add a space
+            const fileName = getFileName(file);
+            textarea.value = beforeAt + '@' + fileName + ' ' + afterCursor;
+            
+            // Move cursor after the file reference and space
+            const newCursorPosition = lastAtPosition + fileName.length + 2;
+            textarea.setSelectionRange(newCursorPosition, newCursorPosition);
+            
+            hideFileDropdown();
+            textarea.focus();
+        }
+
+        function getFileName(path) {
+            return path.split('/').pop();
+        }
+
+        function updateReferencedFiles() {
+            const container = document.getElementById('referenced-files');
+            container.innerHTML = '';
+            
+            referencedFiles.forEach((content, path) => {
+                const fileChip = document.createElement('div');
+                fileChip.className = 'file-chip';
+                fileChip.title = path; // Show full path on hover
+                
+                const fileName = document.createElement('span');
+                fileName.textContent = getFileName(path);
+                fileChip.appendChild(fileName);
+                
+                const removeBtn = document.createElement('button');
+                removeBtn.className = 'remove-file';
+                removeBtn.innerHTML = '×';
+                removeBtn.onclick = () => removeFileReference(path);
+                fileChip.appendChild(removeBtn);
+                
+                container.appendChild(fileChip);
+            });
+        }
+
+        function removeFileReference(path) {
+            referencedFiles.delete(path);
+            updateReferencedFiles();
+            
+            // Update textarea content - handle the @ symbol properly
+            const textarea = document.getElementById('in-text');
+            const text = textarea.value;
+            textarea.value = text.replace(`@${getFileName(path)}`, '').trim();
+            validateInput(); // Ensure button state is updated
+        }
+
         function sendMessage() {
             var message = document.getElementById('in-text').value;
             if (message.length == 0) return;
-            updateHtmlChat('right', message);
+
+            // Process message to include file contents
+            let finalMessage = message;
+            referencedFiles.forEach((content, path) => {
+                const fileRef = `@${getFileName(path)}`;
+                if (!finalMessage.includes(fileRef)) {
+                    finalMessage = `${fileRef}\n${finalMessage}`;
+                }
+                finalMessage = finalMessage.replace(fileRef, `\nFile: ${path}\n\`\`\`\n${content}\n\`\`\`\n`);
+            });
+
+            updateHtmlChat('right', message); // Show original message in chat
             console.log('sendMessage');
             vscodeContext.postMessage({
                 command: 'your-copilot.send',
-                text: { server: document.getElementById('ipAddress').value, message: message, token: document.getElementById('token').value, stream: document.getElementById('stream').checked }
+                text: { 
+                    server: document.getElementById('ipAddress').value, 
+                    message: finalMessage, 
+                    token: document.getElementById('token').value, 
+                    stream: document.getElementById('stream').checked 
+                }
             });
-            // reset the input
+            // reset the input and references
             document.getElementById('in-text').value = "";
-            vscodeContext.setState({ server: document.getElementById('ipAddress').value, token: document.getElementById('token').value, stream: document.getElementById('stream').checked })
+            referencedFiles.clear();
+            updateReferencedFiles();
+            vscodeContext.setState({ 
+                server: document.getElementById('ipAddress').value, 
+                token: document.getElementById('token').value, 
+                stream: document.getElementById('stream').checked 
+            });
         }
 
         addEventListener('message', event => {
@@ -143,6 +368,33 @@
                     console.log('receiveMessage error from extension');
                     updateHtmlChat('left', `ERROR - Please check if your LLM server is running and the IP Address is correct: ${document.getElementById('ipAddress').value}, if you are using oficial OpenAI API, please check if your token is correct or if you have exceeded quota.`);
                     return;
+
+                case 'your-copilot.file-list':
+                    showFileDropdown(message.files);
+                    return;
+
+                case 'your-copilot.file-content':
+                    const textarea = document.getElementById('in-text');
+                    const text = textarea.value;
+                    const beforeAt = text.substring(0, lastAtPosition);
+                    const afterQuery = text.substring(textarea.selectionStart);
+                    
+                    // Store the file reference
+                    const filePath = message.text;
+                    referencedFiles.set(filePath, message.content);
+                    updateReferencedFiles();
+                    
+                    // Update textarea with just the file reference
+                    textarea.value = beforeAt + '@' + getFileName(filePath) + afterQuery;
+                    return;
+
+                case 'your-copilot.active-file':
+                    // Only add if not already referenced
+                    if (!referencedFiles.has(message.text)) {
+                        referencedFiles.set(message.text, message.content);
+                        updateReferencedFiles();
+                    }
+                    return;
             }
         });
 
@@ -154,15 +406,50 @@
         converter.setFlavor('github');
 
         function updateHtmlChat(side, message, stream = false) {
+            const now = new Date();
+            const timeString = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            
             if (side == "left") {
                 var chatElem = originalChat.cloneNode(true);
                 if (!stream) {
                     var n = document.getElementById('chat-wrapper').appendChild(chatElem);
                     var html = converter.makeHtml(message);
-                    n.querySelector('#message-element').innerHTML = html;
-                    var objDiv = document.getElementById("chat-wrapper");
-                    var hrElem = document.createElement("hr");
-                    objDiv.appendChild(hrElem);
+                    const messageBody = n.querySelector('.message-body');
+                    messageBody.innerHTML = html;
+                    
+                    // Apply syntax highlighting to code blocks
+                    messageBody.querySelectorAll('pre code').forEach((block) => {
+                        // Try to detect language from class
+                        const classes = block.className.split(' ');
+                        const languageClass = classes.find(c => c.startsWith('language-'));
+                        const language = languageClass ? languageClass.replace('language-', '') : '';
+                        
+                        // Add line numbers
+                        block.innerHTML = block.innerHTML.split('\\n').map((line, index) => 
+                            `<span class="line-number">${index + 1}</span>${line}`
+                        ).join('\\n');
+                        
+                        // Apply Prism highlighting
+                        if (language && Prism.languages[language]) {
+                            block.innerHTML = Prism.highlight(
+                                block.textContent,
+                                Prism.languages[language],
+                                language
+                            );
+                        }
+                        
+                        // Add copy button
+                        const pre = block.parentElement;
+                        const copyButton = document.createElement('button');
+                        copyButton.className = 'copy-button';
+                        copyButton.innerHTML = 'Copy';
+                        copyButton.onclick = () => {
+                            navigator.clipboard.writeText(block.textContent);
+                            copyButton.innerHTML = 'Copied!';
+                            setTimeout(() => copyButton.innerHTML = 'Copy', 2000);
+                        };
+                        pre.appendChild(copyButton);
+                    });
                 }
                 else {
                     if (!isStreaming) {
@@ -203,19 +490,167 @@
                         }
                     }
                 }
+                chatElem.querySelector('.message-time').textContent = timeString;
             }
             if (side == "right") {
                 var chatElem = document.getElementById('chat-right').cloneNode(true);
                 var n = document.getElementById('chat-wrapper').appendChild(chatElem);
-                n.querySelector('#message-element').innerHTML = message;
-                var objDiv = document.getElementById("chat-wrapper");
-                var hrElem = document.createElement("hr");
-                objDiv.appendChild(hrElem);
+                n.querySelector('#message-element').textContent = message;
+                n.querySelector('.message-time').textContent = timeString;
+                
+                // Scroll to bottom
+                n.scrollIntoView({ behavior: 'smooth', block: 'end' });
             }
         }
     </script>
 
     <style>
+        body {
+            margin: 0;
+            padding: 16px;
+            font-family: var(--vscode-font-family);
+        }
+
+        .chat-container {
+            display: flex;
+            flex-direction: column;
+            height: calc(100vh - 32px);
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .chat-wrapper {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+            border-radius: 12px;
+            margin-bottom: 16px;
+            scroll-behavior: smooth;
+        }
+
+        .chat-message {
+            max-width: 85%;
+            opacity: 0;
+            animation: fadeIn 0.3s ease-out forwards;
+            transition: all 0.3s ease;
+        }
+
+        .user-message {
+            align-self: flex-end;
+        }
+
+        .assistant-message {
+            align-self: flex-start;
+        }
+
+        .message-content {
+            background-color: var(--vscode-editor-background);
+            border: 1px solid var(--vscode-widget-border);
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            transition: transform 0.2s ease;
+        }
+
+        .message-content:hover {
+            transform: translateY(-2px);
+        }
+
+        .message-header {
+            padding: 12px 16px;
+            background-color: var(--vscode-titleBar-activeBackground);
+            border-bottom: 1px solid var(--vscode-widget-border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .avatar-container {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .avatar-icon {
+            font-size: 16px;
+        }
+
+        .avatar {
+            font-weight: 600;
+            color: var(--vscode-titleBar-activeForeground);
+        }
+
+        .message-time {
+            font-size: 12px;
+            color: var(--vscode-descriptionForeground);
+        }
+
+        .message-body {
+            padding: 16px;
+            color: var(--vscode-editor-foreground);
+            line-height: 1.6;
+        }
+
+        .message-body p {
+            margin: 0 0 16px 0;
+        }
+
+        .message-body p:last-child {
+            margin-bottom: 0;
+        }
+
+        pre {
+            position: relative;
+            background-color: var(--vscode-textCodeBlock-background) !important;
+            border-radius: 6px;
+            padding: 16px !important;
+            margin: 16px 0 !important;
+            overflow: auto;
+        }
+
+        pre code {
+            font-family: var(--vscode-editor-font-family);
+            font-size: var(--vscode-editor-font-size);
+            line-height: 1.5;
+            counter-reset: line;
+        }
+
+        .line-number {
+            counter-increment: line;
+            display: inline-block;
+            width: 1.5em;
+            margin-right: 1em;
+            color: var(--vscode-editorLineNumber-foreground);
+            text-align: right;
+            user-select: none;
+        }
+
+        .copy-button {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            background-color: var(--vscode-button-background);
+            color: var(--vscode-button-foreground);
+            border: none;
+            border-radius: 4px;
+            padding: 4px 8px;
+            font-size: 12px;
+            cursor: pointer;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+
+        pre:hover .copy-button {
+            opacity: 1;
+        }
+
+        .copy-button:hover {
+            background-color: var(--vscode-button-hoverBackground);
+        }
+
         .input {
             background-color: var(--vscode-input-background);
             color: var(--vscode-input-foreground);
@@ -237,43 +672,6 @@
             flex-direction: column;
             flex: 1;
             margin-bottom: 4px;
-        }
-
-        .chat-container {
-            display: flex;
-            flex-direction: row;
-            width: 100%;
-        }
-
-        .chat-wrapper {
-            background-color: var(--vscode-input-background);
-            min-height: 500px;
-            max-height: 700px;
-            overflow-y: auto;
-            flex: 1;
-            border-radius: 4px;
-            padding: 10px;
-        }
-
-        .chat {
-            width: 100%;
-            margin-bottom: 16px;
-            opacity: 0;
-            animation: fadeIn 1s forwards;
-        }
-
-        @keyframes fadeIn {
-            100% {
-                opacity: 1;
-            }
-        }
-
-        .chat-right {
-            width: 100%;
-            margin-bottom: 16px;
-            text-align: right;
-            opacity: 0;
-            animation: fadeIn 1s forwards;
         }
 
         .chat-type-container {
@@ -326,6 +724,87 @@
 
         summary {
             cursor: pointer;
+        }
+
+        .textarea-container {
+            position: relative;
+            width: 100%;
+        }
+
+        .file-dropdown {
+            display: none;
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background-color: var(--vscode-input-background);
+            border: 1px solid var(--vscode-input-border);
+            border-radius: 4px;
+            max-height: 200px;
+            overflow-y: auto;
+            z-index: 1000;
+            margin-top: 4px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        .file-item {
+            padding: 8px 12px;
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+        }
+
+        .file-item.selected {
+            background-color: var(--vscode-list-activeSelectionBackground);
+            color: var(--vscode-list-activeSelectionForeground);
+        }
+
+        .file-item:not(.selected):hover {
+            background-color: var(--vscode-list-hoverBackground);
+        }
+
+        .referenced-files {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 8px;
+            min-height: 24px;
+        }
+
+        .file-chip {
+            display: flex;
+            align-items: center;
+            background-color: var(--vscode-badge-background);
+            color: var(--vscode-badge-foreground);
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            gap: 4px;
+        }
+
+        .remove-file {
+            background: none;
+            border: none;
+            color: var(--vscode-badge-foreground);
+            cursor: pointer;
+            padding: 0 2px;
+            font-size: 14px;
+            line-height: 1;
+            opacity: 0.7;
+        }
+
+        .remove-file:hover {
+            opacity: 1;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
     </style>
 </body>

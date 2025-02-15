@@ -44,19 +44,59 @@
         {
           "id": "your-copilot",
           "title": "Your Copilot",
-          "icon": "images/icon-your-copilot-icon.png"
+          "icon": "media/icon.png"
         }
       ]
     },
     "views": {
       "your-copilot": [
         {
+          "type": "webview",
           "id": "your-copilot-view",
-          "name": "Your Copilot",
-          "type": "webview"
+          "name": "Your Copilot"
         }
       ]
-    }
+    },
+    "commands": [
+      {
+        "command": "your-copilot.addFileToContext",
+        "title": "Add File to Chat Context",
+        "category": "Your Copilot"
+      },
+      {
+        "command": "your-copilot.addSelectionToContext",
+        "title": "Add Selection to Chat Context",
+        "category": "Your Copilot"
+      },
+      {
+        "command": "your-copilot.clearContext",
+        "title": "Clear Chat Context",
+        "category": "Your Copilot"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "your-copilot.addSelectionToContext",
+          "when": "editorHasSelection",
+          "group": "YourCopilot@1"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "your-copilot.addFileToContext",
+          "group": "YourCopilot@1"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "your-copilot.addSelectionToContext",
+        "key": "ctrl+shift+c",
+        "mac": "cmd+shift+c",
+        "when": "editorHasSelection"
+      }
+    ]
   },
   "scripts": {
     "vscode:prepublish": "npm run package",
@@ -87,6 +127,7 @@
     "webpack-cli": "^5.1.4"
   },
   "dependencies": {
-    "axios": "^1.6.5"
+    "axios": "^1.6.7",
+    "ignore": "^5.3.1"
   }
 }
