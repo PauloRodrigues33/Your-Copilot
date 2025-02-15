@@ -251,6 +251,10 @@ class YourCopilotWebViewProvider implements vscode.WebviewViewProvider {
                             content: content
                         });
                         return;
+
+                    case 'your-copilot.clear-conversation':
+                        state.clearMessageHistory();
+                        return;
                 }
             },
             undefined

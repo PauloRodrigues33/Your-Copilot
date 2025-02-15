@@ -1,60 +1,99 @@
-# Welcome to your future, *your copilot.*
+# Your Copilot - Your Self-Hosted AI Assistant for VS Code
 
-![your copilot banner](https://i.ibb.co/wc9MTb3/banner1.png)
+<div align="center">
+  <img src="https://i.ibb.co/qf9ncw5/Captura-de-Tela-2025-02-15-a-s-17-27-39.png" alt="your copilot banner" width="400"/>
+  <img src="https://i.ibb.co/Zps38zrZ/Captura-de-Tela-2025-02-15-a-s-17-28-35.png" alt="your copilot banner" width="400"/>
+</div>
 
+[![VS Code Marketplace](https://img.shields.io/visual-studio-marketplace/v/paulorodrigues.your-copilot?color=blue&label=VS%20Code%20Marketplace)](https://marketplace.visualstudio.com/items?itemName=paulorodrigues.your-copilot)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![GitHub](https://img.shields.io/github/stars/PauloRodrigues33/Your-Copilot?style=social)](https://github.com/PauloRodrigues33/Your-Copilot)
 
+## Overview
 
-**For who is this extension:**
+Your Copilot is a powerful, open-source VS Code extension that enables you to use your own LLM (Large Language Model) server directly within Visual Studio Code. Get AI-powered code generation, suggestions, and insights while keeping your data secure and under your control.
 
-- Want use your own LLM server in the Visual Studio Code.
+## Key Features
 
-- Want generate code, get code opinions, get solutions and so on right in the editor.
+- 🚀 Self-hosted LLM integration
+- 💻 Code generation and suggestions
+- 🔒 Local data security
+- 🔄 Real-time streaming support
+- 🎯 Compatible with OpenAI API standard
+- 📝 Smart file mentioning and context awareness
 
-- Don't have a money to pay GH Copilot or Open AI.
+## Planned Features 🚀
 
-- Want your data secured locally.
+We're actively working on bringing more powerful features to Your Copilot:
 
-- Or just enthusiast that loves LLM and Open Source projects.
+### 🔮 Offline Tab Completion
+- Smart code completion that works without internet connection
+- Faster response times with local processing
+- Language-specific completions based on your codebase
 
-  
+### 📚 RAG (Retrieval-Augmented Generation)
+- Enhanced context understanding using your project's documentation
+- Improved code suggestions based on your codebase history
+- Smart integration with project-specific knowledge
 
-**Warning:**
+### 🤖 Agentic Behaviour
+- Autonomous code refactoring suggestions
+- Proactive bug detection and fixes
+- Smart project structure optimization
+- Automated documentation generation
 
-You need your own LLM server with Open AI API based to use this extension, be advised.
-This extension don't store or share anything of your data, it's your copilot.
-The answer quality, fidelity and speed depends directly of what LLM model you are using and server setup.
-  
+## Who Is This For?
 
-**How to use:**
+- Developers who want to use their own LLM server in VS Code
+- Those seeking code generation and AI assistance without subscription costs
+- Privacy-conscious users who want to keep their data secure locally
+- LLM and Open Source enthusiasts
 
-- Install the extension.
+## Prerequisites
 
-- Click in the Configuration at the end of the extension.
+⚠️ **Important:** You need your own LLM server that's compatible with the OpenAI API standard to use this extension.
 
-- Put you LLM Server IP Address *(don't forget the 'http://' or 'https://')*.
+## Quick Start
 
-- If you are using the oficial OpenAI API, put your OpenAI Token, or leave blank.
+1. Install the extension from VS Code Marketplace
+2. Open the extension settings
+3. Configure your LLM Server URL (include 'http://' or 'https://')
+4. (Optional) Add your OpenAI API token if using the official API
+5. Toggle streaming messages according to your server's capabilities
 
-- You can enable Stream messages to get the tokens as soon they are generated, the text will mount in realtime leave it disabled if your server don't support realtime streams or facing performance problems.
+## Recommended LLM Servers
 
-  
+We recommend using any of these excellent LLM servers:
 
-We recommend [LM Studio](https://lmstudio.ai/) as your LLM Server, it's fast and UI friendly.
-Also, you can use:
-[Ollama](https://ollama.com/)
-[vllm](https://vllm.ai/)
-or any other LLM server that supports the Open AI API standard.
+- [LM Studio](https://lmstudio.ai/) - Fast and user-friendly
+- [Ollama](https://ollama.com/) - Simple and efficient
+- [vllm](https://vllm.ai/) - High-performance inference
+- Any server supporting the OpenAI API standard
 
-  
+## Important Notes
+
+- This extension does not store or share any of your data
+- Response quality, accuracy, and speed depend on your chosen LLM model and server setup
+- Streaming feature can be disabled if your server doesn't support it or if you experience performance issues
+
+## Contributing 🤝
+
+Your Copilot is an open-source project and we welcome contributions! Whether you're fixing bugs, adding new features, improving documentation, or spreading the word - your help is welcome and appreciated.
+
+- 🐛 Found a bug? Open an issue!
+- ✨ Want to add a feature? Submit a pull request!
+- 📖 Documentation improvements are always welcome
+
+Check out our [GitHub repository](https://github.com/PauloRodrigues33/Your-Copilot) to get started.
+
+## About
 
 Proudly developed by [Paulo Rodrigues](https://github.com/PauloRodrigues33)
 
-  
+## License
 
-MIT License Copyright (c) 2024 Paulo Rodrigues.
+MIT License - Copyright (c) 2024 Paulo Rodrigues
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions: The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
-
-  
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.

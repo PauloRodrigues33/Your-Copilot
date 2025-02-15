@@ -651,4 +651,47 @@ document.getElementById('settings-dialog').addEventListener('close', () => {
             stream: document.getElementById('stream').checked 
         });
     }
-}); 
+});
+
+function clearConversation() {
+    // Clear the chat wrapper
+    const chatWrapper = document.getElementById('chat-wrapper');
+    chatWrapper.innerHTML = `<div class="chat-message user-message" id="chat-right">
+                <div class="message-content">
+                    <div class="message-header">
+                        <span class="avatar">You</span>
+                        <span class="message-time"></span>
+                    </div>
+                    <div class="message-body">
+                        <p id="message-element">Hi Copilot!</p>
+                    </div>
+                </div>
+            </div>
+            <div class="chat-message assistant-message" id="chat">
+                <div class="message-content">
+                    <div class="message-header">
+                        <div class="avatar-container">
+                            <span class="avatar-icon">🤖</span>
+                            <span class="avatar">AI</span>
+                        </div>
+                        <span class="message-time"></span>
+                    </div>
+                    <div class="message-body">
+                        <p id="message-element">Hi, I'm Your Copilot</p>
+                    </div>
+                </div>
+            </div>`;
+    
+    // Clear referenced files
+    referencedFiles.clear();
+    updateReferencedFiles();
+    
+    // Clear the input
+    document.getElementById('in-text').value = '';
+    validateInput();
+    
+    // Notify the extension to clear message history
+    vscodeContext.postMessage({
+        command: 'your-copilot.clear-conversation'
+    });
+} 

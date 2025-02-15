@@ -7,7 +7,7 @@
     <meta http-equiv="Content-Security-Policy"
         content="default-src 'self' vscode-resource:; script-src 'self' vscode-resource: https://cdn.jsdelivr.net 'unsafe-inline'; style-src 'self' vscode-resource: https://cdn.jsdelivr.net 'unsafe-inline';">
     <title>Your Copilot</title>
-    
+
     <!-- External Libraries -->
     <script src="https://cdn.jsdelivr.net/npm/showdown@2.1.0/dist/showdown.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
@@ -18,7 +18,7 @@
     <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-python.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-jsx.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-tsx.min.js"></script>
-    
+
     <!-- Styles -->
     <link href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet" />
     <link href="{{STYLES_URI}}" rel="stylesheet" />
@@ -26,29 +26,31 @@
 
 <body>
     <div class="chat-container">
-        <div class="chat-wrapper" id="chat-wrapper">
-            <div class="chat-message user-message" id="chat-right">
-                <div class="message-content">
-                    <div class="message-header">
-                        <span class="avatar">You</span>
-                        <span class="message-time"></span>
-                    </div>
-                    <div class="message-body">
-                        <p id="message-element">Hi Copilot!</p>
+        <div class="chat-wrapper-wrapper">
+            <div class="chat-wrapper" id="chat-wrapper">
+                <div class="chat-message user-message" id="chat-right">
+                    <div class="message-content">
+                        <div class="message-header">
+                            <span class="avatar">You</span>
+                            <span class="message-time"></span>
+                        </div>
+                        <div class="message-body">
+                            <p id="message-element">Hi Copilot!</p>
+                        </div>
                     </div>
                 </div>
-            </div>
-            <div class="chat-message assistant-message" id="chat">
-                <div class="message-content">
-                    <div class="message-header">
-                        <div class="avatar-container">
-                            <span class="avatar-icon">🤖</span>
-                            <span class="avatar">AI</span>
+                <div class="chat-message assistant-message" id="chat">
+                    <div class="message-content">
+                        <div class="message-header">
+                            <div class="avatar-container">
+                                <span class="avatar-icon">🤖</span>
+                                <span class="avatar">AI</span>
+                            </div>
+                            <span class="message-time"></span>
                         </div>
-                        <span class="message-time"></span>
-                    </div>
-                    <div class="message-body">
-                        <p id="message-element">Hi, I'm your copilot</p>
+                        <div class="message-body">
+                            <p id="message-element">Hi, I'm Your Copilot</p>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -56,20 +58,31 @@
     </div>
 
     <div class="chat-type-container">
-        <div class="referenced-files" id="referenced-files"></div>
-        <div class="textarea-container">
-            <textarea name="in-text" id="in-text" onchange="validateInput()" onkeydown="handleKeyPress(event)" oninput="handleInput(event)"></textarea>
-            <div id="file-dropdown" class="file-dropdown"></div>
+        <div class="chat-type-container-wrapper">
+            <div class="referenced-files" id="referenced-files"></div>
+            <div class="textarea-container">
+                <textarea name="in-text" id="in-text" onchange="validateInput()" onkeydown="handleKeyPress(event)"
+                    oninput="handleInput(event)"></textarea>
+                <div id="file-dropdown" class="file-dropdown"></div>
+            </div>
+            <div class="button-container">
+                <button type="button" class="btn" id="btn" onclick="sendMessage()" onmouseenter="toggleOnBtnHover()"
+                    onmouseleave="toggleOnBtnHover()">Send</button>
+                <button type="button" class="settings-btn" onclick="toggleSettings()" title="Settings">
+                    <svg width="16" height="16" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+                        <path
+                            d="M9.1 4.4L8.6 2H7.4L6.9 4.4L6.2 4.6L4.2 3.2L3.2 4.2L4.6 6.2L4.4 6.9L2 7.4V8.6L4.4 9.1L4.6 9.8L3.2 11.8L4.2 12.8L6.2 11.4L6.9 11.6L7.4 14H8.6L9.1 11.6L9.8 11.4L11.8 12.8L12.8 11.8L11.4 9.8L11.6 9.1L14 8.6V7.4L11.6 6.9L11.4 6.2L12.8 4.2L11.8 3.2L9.8 4.6L9.1 4.4ZM8 10C6.9 10 6 9.1 6 8C6 6.9 6.9 6 8 6C9.1 6 10 6.9 10 8C10 9.1 9.1 10 8 10Z" />
+                    </svg>
+                </button>
+                <button type="button" class="settings-btn" onclick="clearConversation()" title="Clear Conversation">
+                    <svg width="16" height="16" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+                        <path
+                            d="M8 2C11.3 2 14 4.7 14 8C14 11.3 11.3 14 8 14C4.7 14 2 11.3 2 8C2 4.7 4.7 2 8 2ZM8 1C4.1 1 1 4.1 1 8C1 11.9 4.1 15 8 15C11.9 15 15 11.9 15 8C15 4.1 11.9 1 8 1ZM10.7 11.5L8 8.8L5.3 11.5L4.5 10.7L7.2 8L4.5 5.3L5.3 4.5L8 7.2L10.7 4.5L11.5 5.3L8.8 8L11.5 10.7L10.7 11.5Z" />
+                    </svg>
+                </button>
+            </div>
+            <div class="error" id="error">Please insert an IP Address in the configuration below.</div>
         </div>
-        <div class="button-container">
-            <button type="button" class="btn" id="btn" onclick="sendMessage()" onmouseenter="toggleOnBtnHover()" onmouseleave="toggleOnBtnHover()">Send</button>
-            <button type="button" class="settings-btn" onclick="toggleSettings()" title="Settings">
-                <svg width="16" height="16" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M9.1 4.4L8.6 2H7.4L6.9 4.4L6.2 4.6L4.2 3.2L3.2 4.2L4.6 6.2L4.4 6.9L2 7.4V8.6L4.4 9.1L4.6 9.8L3.2 11.8L4.2 12.8L6.2 11.4L6.9 11.6L7.4 14H8.6L9.1 11.6L9.8 11.4L11.8 12.8L12.8 11.8L11.4 9.8L11.6 9.1L14 8.6V7.4L11.6 6.9L11.4 6.2L12.8 4.2L11.8 3.2L9.8 4.6L9.1 4.4ZM8 10C6.9 10 6 9.1 6 8C6 6.9 6.9 6 8 6C9.1 6 10 6.9 10 8C10 9.1 9.1 10 8 10Z" />
-                </svg>
-            </button>
-        </div>
-        <div class="error" id="error">Please insert an IP Address in the configuration below.</div>
     </div>
     <br />
 
@@ -79,7 +92,15 @@
             <button class="close-btn" onclick="toggleSettings()">×</button>
         </div>
         <div class="settings-content">
-            <p>Insert your LLM server (we recommend <a href="https://lmstudio.ai/">LM Studio</a> as your LLM server)</p>
+            <p>Insert your LLM server</p>
+            <p>You can use:</p>
+            <ul>
+                <li>LM Studio</li>
+                <li>Ollama</li>
+                <li>Vllm</li>
+                <li>Any other LLM server that supports the OpenAI API standard</li>
+            </ul>
+            <br />
             <div class="input-control">
                 <label for="ipAddress">IP Address</label>
                 <input type="text" name="ipAddress" id="ipAddress" placeholder="http://localhost:1234" class="input">
@@ -87,7 +108,8 @@
 
             <div class="input-control">
                 <label for="token">API Token</label>
-                <input type="password" name="token" id="token" placeholder="Leave blank if you are using your own LLM server" class="input">
+                <input type="password" name="token" id="token"
+                    placeholder="Leave blank if you are using your own LLM server" class="input">
                 <small>Only if you are using oficial OpenAI API</small>
             </div>
 
