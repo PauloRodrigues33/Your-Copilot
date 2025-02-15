@@ -22,11 +22,38 @@ interface Settings {
 const DEFAULT_SETTINGS: Settings = {
     server: 'http://localhost:1234',
     token: '',
-    maxContextMessages: 10,
+    maxContextMessages: 30,
     stream: false
 };
 
-const DEFAULT_CHARACTER: string = "My name is 'Your Copilot' and i was developed by 'Paulo Rodrigues'. I'm experienced developer, my answers and code examples are in markdown formatted, offer code assistance and help in troubleshooting in code languages, i can write tests and fix code.";
+const DEFAULT_CHARACTER: string = `You are an intelligent assistant designed to assist software developers with various tasks related to coding, troubleshooting, debugging, writing tests, and general development-related inquiries. You should be responsive, knowledgeable, and provide clear, actionable advice.
+
+Core Responsibilities
+Code Assistance
+
+Provide code examples in markdown format.
+Write clean, efficient, and maintainable code for a wide range of programming languages (e.g., Python, JavaScript, Java, C++).
+Offer best practices and design patterns when appropriate.
+Troubleshooting
+
+Help identify and fix bugs or issues in existing codebases.
+Analyze error logs and provide solutions to common and complex problems.
+Suggest improvements for performance optimization and scalability.
+Testing and Debugging
+
+Write unit tests, integration tests, and end-to-end tests using frameworks like pytest (Python), Jest (JavaScript), or JUnit (Java).
+Provide strategies to ensure code quality through automated testing.
+Suggest debugging tools and techniques.
+Project Management
+
+Offer advice on project planning, estimation, and task prioritization.
+Help with version control best practices (e.g., Git).
+Learning and Development
+
+Provide resources for learning new technologies or improving existing skills.
+Suggest books, courses, and articles to stay updated in the tech industry.
+Guidelines
+Be clear and concise.`;
 
 // Global state
 class GlobalState {
@@ -165,7 +192,10 @@ class YourCopilotWebViewProvider implements vscode.WebviewViewProvider {
 
         webviewView.webview.options = {
             enableScripts: true,
-            localResourceRoots: [vscode.Uri.file(path.join(__dirname, 'webview'))]
+            localResourceRoots: [
+                vscode.Uri.joinPath(vscode.Uri.file(__dirname), '..', 'src', 'webview'),
+                vscode.Uri.joinPath(vscode.Uri.file(__dirname), '..', 'node_modules')
+            ]
         };
 
         webviewView.webview.html = this.getWebviewContent(vscode.Uri.file(__dirname));
@@ -205,11 +235,32 @@ class YourCopilotWebViewProvider implements vscode.WebviewViewProvider {
     }
 
     private getWebviewContent(extensionUri: vscode.Uri): string {
-        const htmlPath = path.join(extensionUri.fsPath, 'src', 'webview', 'index.html');
+        const webviewUri = vscode.Uri.joinPath(extensionUri, '..', 'src', 'webview', 'index.html');
         try {
-            return fs.readFileSync(htmlPath, 'utf8');
+            let html = fs.readFileSync(webviewUri.fsPath, 'utf8');
+            
+            // Get webview
+            const webview = GlobalState.getInstance().getWebview();
+            if (!webview) {
+                throw new Error('Webview not initialized');
+            }
+
+            // Create URIs for local resources
+            const stylesUri = webview.asWebviewUri(
+                vscode.Uri.joinPath(extensionUri, '..', 'src', 'webview', 'styles.css')
+            );
+            const scriptUri = webview.asWebviewUri(
+                vscode.Uri.joinPath(extensionUri, '..', 'src', 'webview', 'script.js')
+            );
+
+            // Replace placeholders with actual URIs
+            html = html
+                .replace('{{STYLES_URI}}', stylesUri.toString())
+                .replace('{{SCRIPT_URI}}', scriptUri.toString());
+
+            return html;
         } catch (error) {
-            console.error('Error reading HTML file:', error);
+            console.error('Error reading or processing HTML file:', error);
             return 'Error loading HTML file';
         }
     }

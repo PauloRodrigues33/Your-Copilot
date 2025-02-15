@@ -40,6 +40,10 @@ The answer quality, fidelity and speed depends directly of what LLM model you ar
   
 
 We recommend [LM Studio](https://lmstudio.ai/) as your LLM Server, it's fast and UI friendly.
+Also, you can use:
+[Ollama](https://ollama.com/)
+[vllm](https://vllm.ai/)
+or any other LLM server that supports the Open AI API standard.
 
   
 
