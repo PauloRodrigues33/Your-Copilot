@@ -56,34 +56,44 @@
             <textarea name="in-text" id="in-text" onchange="validateInput()" onkeydown="handleKeyPress(event)" oninput="handleInput(event)"></textarea>
             <div id="file-dropdown" class="file-dropdown"></div>
         </div>
-        <button type="button" class="btn" id="btn" onclick="sendMessage()" onmouseenter="toggleOnBtnHover()"
-            onmouseleave="toggleOnBtnHover()">Send</button>
+        <div class="button-container">
+            <button type="button" class="btn" id="btn" onclick="sendMessage()" onmouseenter="toggleOnBtnHover()" onmouseleave="toggleOnBtnHover()">Send</button>
+            <button type="button" class="settings-btn" onclick="toggleSettings()" title="Settings">
+                <svg width="16" height="16" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M9.1 4.4L8.6 2H7.4L6.9 4.4L6.2 4.6L4.2 3.2L3.2 4.2L4.6 6.2L4.4 6.9L2 7.4V8.6L4.4 9.1L4.6 9.8L3.2 11.8L4.2 12.8L6.2 11.4L6.9 11.6L7.4 14H8.6L9.1 11.6L9.8 11.4L11.8 12.8L12.8 11.8L11.4 9.8L11.6 9.1L14 8.6V7.4L11.6 6.9L11.4 6.2L12.8 4.2L11.8 3.2L9.8 4.6L9.1 4.4ZM8 10C6.9 10 6 9.1 6 8C6 6.9 6.9 6 8 6C9.1 6 10 6.9 10 8C10 9.1 9.1 10 8 10Z" />
+                </svg>
+            </button>
+        </div>
         <div class="error" id="error">Please insert an IP Address in the configuration below.</div>
     </div>
     <br />
 
-    <details>
-        <summary>Configuration</summary>
-        <div>
-            <p>Insert your LLM server (we recomend <a href="https://lmstudio.ai/">LM Studio</a> as your LLM server)</p>
+    <dialog id="settings-dialog" class="settings-dialog">
+        <div class="settings-header">
+            <h2>Settings</h2>
+            <button class="close-btn" onclick="toggleSettings()">×</button>
+        </div>
+        <div class="settings-content">
+            <p>Insert your LLM server (we recommend <a href="https://lmstudio.ai/">LM Studio</a> as your LLM server)</p>
             <div class="input-control">
-                <label for="ip" class="label">IP</label>
+                <label for="ipAddress">IP Address</label>
                 <input type="text" name="ipAddress" id="ipAddress" placeholder="http://localhost:1234" class="input">
             </div>
 
             <div class="input-control">
-                <label for="ip" class="label">Token</label>
-                <input type="password" name="token" id="token"
-                    placeholder="Leave blank if you are using your own LLM server" class="input">
+                <label for="token">API Token</label>
+                <input type="password" name="token" id="token" placeholder="Leave blank if you are using your own LLM server" class="input">
                 <small>Only if you are using oficial OpenAI API</small>
             </div>
+
             <div class="input-control">
-                <label for="stream" class="label-check">
-                    <input type="checkbox" name="stream" id="stream" class="input-check" />Stream
+                <label class="label-check">
+                    <input type="checkbox" name="stream" id="stream" class="input-check">
+                    Stream responses
                 </label>
             </div>
         </div>
-    </details>
+    </dialog>
 
     <script>
         var vscodeContext = acquireVsCodeApi();
@@ -502,6 +512,36 @@
                 n.scrollIntoView({ behavior: 'smooth', block: 'end' });
             }
         }
+
+        function toggleSettings() {
+            const dialog = document.getElementById('settings-dialog');
+            if (dialog.open) {
+                dialog.close();
+            } else {
+                dialog.showModal();
+            }
+        }
+
+        // Add event listener for ESC key to close dialog
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') {
+                const dialog = document.getElementById('settings-dialog');
+                if (dialog.open) {
+                    dialog.close();
+                }
+            }
+        });
+
+        // Save settings when dialog is closed
+        document.getElementById('settings-dialog').addEventListener('close', () => {
+            if (configurationValidated()) {
+                vscodeContext.setState({ 
+                    server: document.getElementById('ipAddress').value, 
+                    token: document.getElementById('token').value, 
+                    stream: document.getElementById('stream').checked 
+                });
+            }
+        });
     </script>
 
     <style>
@@ -687,11 +727,16 @@
             width: -webkit-fill-available;
         }
 
-        .btn {
+        .button-container {
+            display: flex;
+            gap: 8px;
             margin-top: 8px;
+        }
+
+        .btn {
+            flex: 1;
             color: var(--vscode-button-foreground);
             background-color: var(--vscode-button-background);
-            width: 100%;
             border: none;
             border-radius: 4px;
             padding: 10px;
@@ -805,6 +850,107 @@
                 opacity: 1;
                 transform: translateY(0);
             }
+        }
+
+        .settings-btn {
+            background-color: transparent;
+            border: none;
+            padding: 8px;
+            cursor: pointer;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .settings-btn:hover {
+            background-color: var(--vscode-toolbar-hoverBackground);
+        }
+
+        .settings-btn svg {
+            fill: var(--vscode-foreground);
+        }
+
+        .settings-dialog {
+            background-color: var(--vscode-editor-background);
+            color: var(--vscode-foreground);
+            border: 1px solid var(--vscode-widget-border);
+            border-radius: 6px;
+            padding: 0;
+            max-width: 500px;
+            width: 90%;
+            margin: 20px auto;
+            box-sizing: border-box;
+        }
+
+        .settings-dialog::backdrop {
+            background-color: rgba(0, 0, 0, 0.5);
+        }
+
+        .settings-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px;
+            border-bottom: 1px solid var(--vscode-widget-border);
+            box-sizing: border-box;
+        }
+
+        .settings-header h2 {
+            margin: 0;
+            font-size: 1.2em;
+        }
+
+        .close-btn {
+            background: none;
+            border: none;
+            color: var(--vscode-foreground);
+            font-size: 1.5em;
+            cursor: pointer;
+            padding: 0 8px;
+        }
+
+        .settings-content {
+            padding: 16px;
+            box-sizing: border-box;
+        }
+
+        .input-control {
+            margin-bottom: 16px;
+            box-sizing: border-box;
+        }
+
+        .input-control label {
+            display: block;
+            margin-bottom: 8px;
+        }
+
+        .input-control input[type="text"],
+        .input-control input[type="password"] {
+            width: 100%;
+            padding: 8px;
+            border-radius: 4px;
+            border: 1px solid var(--vscode-input-border);
+            background-color: var(--vscode-input-background);
+            color: var(--vscode-input-foreground);
+            box-sizing: border-box;
+        }
+
+        .label-check {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+        }
+
+        .input-check {
+            margin: 0;
+        }
+
+        small {
+            display: block;
+            margin-top: 4px;
+            color: var(--vscode-descriptionForeground);
         }
     </style>
 </body>
