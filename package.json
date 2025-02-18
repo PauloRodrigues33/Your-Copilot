@@ -1,7 +1,7 @@
 {
   "name": "your-copilot",
   "displayName": "Your Copilot",
-  "description": "Use your own AI to help you code",
+  "description": "Your personal AI coding assistant",
   "extensionKind": [
     "ui",
     "workspace"
@@ -11,7 +11,7 @@
     "email": "paulo.robertojr33@gmail.com"
   },
   "icon": "images/icon-your-copilot.png",
-  "version": "0.1.0",
+  "version": "0.0.1",
   "repository": {
     "type": "git",
     "url": "https://github.com/PauloRodrigues33/Your-Copilot"
@@ -21,8 +21,6 @@
     "vscode": "^1.85.0"
   },
   "categories": [
-    "Machine Learning",
-    "Programming Languages",
     "Other"
   ],
   "keywords": [
@@ -35,7 +33,10 @@
     "coding",
     "copilot"
   ],
-  "activationEvents": [],
+  "activationEvents": [
+    "onCommand:your-copilot.start",
+    "onView:your-copilot-view"
+  ],
   "main": "./dist/extension.js",
   "type": "commonjs",
   "contributes": {
@@ -72,6 +73,10 @@
         "command": "your-copilot.clearContext",
         "title": "Clear Chat Context",
         "category": "Your Copilot"
+      },
+      {
+        "command": "your-copilot.start",
+        "title": "Start Your Copilot"
       }
     ],
     "menus": {
@@ -107,7 +112,13 @@
     "watch-tests": "tsc -p . -w --outDir out",
     "pretest": "npm run compile-tests && npm run compile && npm run lint",
     "lint": "eslint src --ext ts",
-    "test": "vscode-test"
+    "test": "vscode-test",
+    "clean": "rm -rf dist out",
+    "clean:all": "npm run clean && cd src/webview/react && npm run clean",
+    "build:webview": "cd src/webview/react && npm run build",
+    "watch:webview": "cd src/webview/react && npm run dev",
+    "build": "npm run clean:all && npm run build:webview && npm run compile",
+    "dev": "concurrently \"npm run watch\" \"npm run watch:webview\""
   },
   "devDependencies": {
     "@types/mocha": "^10.0.6",
@@ -119,7 +130,7 @@
     "@vscode/test-cli": "^0.0.4",
     "@vscode/test-electron": "^2.3.8",
     "@vscode/vsce": "^2.23.0",
-    "copy-webpack-plugin": "^12.0.2",
+    "concurrently": "^8.2.2",
     "eslint": "^8.56.0",
     "ts-loader": "^9.5.1",
     "typescript": "^5.3.3",
@@ -127,7 +138,8 @@
     "webpack-cli": "^5.1.4"
   },
   "dependencies": {
-    "axios": "^1.6.7",
-    "ignore": "^5.3.1"
+    "axios": "^1.6.2",
+    "copy-webpack-plugin": "^12.0.2",
+    "ignore": "^5.3.0"
   }
 }

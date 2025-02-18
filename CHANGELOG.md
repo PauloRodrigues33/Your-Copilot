@@ -1,5 +1,12 @@
 # Change Log
 
+## [0.1.2] 2025-02-17
+- Fixed file reference bug.
+- Added Apply Button to update the current file with the changes using Diff.
+
+## [0.1.1] 2025-02-17
+- Fixed CSP error.
+
 ## [0.1.0] 2025-02-15
 - Context history.
 - Added a settings button to configure the LLM server and token.

@@ -49,8 +49,11 @@ const extensionConfig = {
     new CopyWebPackPlugin({
       patterns: [
         {
-          from: 'src/webview/**/*.html',
-          to: './',
+          from: path.join(__dirname, 'src', 'webview', 'react', 'dist'),
+          to: path.join(__dirname, 'dist', 'webview'),
+          globOptions: {
+            ignore: ['**/.DS_Store']
+          }
         }
       ]
     })

@@ -4,6 +4,7 @@ import * as fs from 'fs';
 import * as http from 'http';
 import axios from 'axios';
 import ignore from 'ignore';
+import { ContextService } from './services/context.service';
 
 // Types
 interface Message {
@@ -151,166 +152,172 @@ class GlobalState {
 
 // Extension activation
 export function activate(context: vscode.ExtensionContext) {
-    const state = GlobalState.getInstance();
-    state.setContext(context);
-    state.clearMessageHistory(); // Initialize with system message
+    let panel: vscode.WebviewPanel | undefined = undefined;
+    let contextService: ContextService | undefined = undefined;
 
-    let webviewProvider = new YourCopilotWebViewProvider();
-
-    context.subscriptions.push(
-        vscode.window.registerWebviewViewProvider(
-            'your-copilot-view',
-            webviewProvider,
-            { webviewOptions: { retainContextWhenHidden: true } }
-        )
-    );
-
-    // Listen for active editor changes
-    context.subscriptions.push(
-        vscode.window.onDidChangeActiveTextEditor(editor => {
-            if (editor) {
-                const state = GlobalState.getInstance();
-                const webview = state.getWebview();
-                
-                if (webview) {
-                    try {
-                        // Ignore some file types that shouldn't be referenced
-                        const ignoredExtensions = ['.git', '.pdf', '.jpg', '.png', '.ico'];
-                        const filePath = editor.document.uri.fsPath;
-                        if (ignoredExtensions.some(ext => filePath.endsWith(ext))) {
-                            return;
-                        }
-
-                        const relativePath = vscode.workspace.asRelativePath(editor.document.uri);
-                        const content = editor.document.getText();
-                        
-                        console.log('Sending active file update:', relativePath);
-                        
-                        webview.postMessage({
-                            command: 'your-copilot.active-file',
-                            text: relativePath,
-                            content: content
-                        });
-                    } catch (error) {
-                        console.error('Error sending active file update:', error);
-                    }
-                }
+    function createWebviewPanel(viewColumn: vscode.ViewColumn = vscode.ViewColumn.Two) {
+        panel = vscode.window.createWebviewPanel(
+            'yourCopilot',
+            'Your Copilot',
+            viewColumn,
+            {
+                enableScripts: true,
+                retainContextWhenHidden: true,
+                localResourceRoots: [
+                    vscode.Uri.joinPath(context.extensionUri, 'dist', 'webview')
+                ]
             }
-        })
-    );
-}
+        );
 
-// WebView Provider
-class YourCopilotWebViewProvider implements vscode.WebviewViewProvider {
-    private _view?: vscode.WebviewView;
+        contextService = new ContextService(panel.webview);
 
-    resolveWebviewView(
-        webviewView: vscode.WebviewView,
-        context: vscode.WebviewViewResolveContext<unknown>,
-        token: vscode.CancellationToken
-    ): void | Thenable<void> {
-        this._view = webviewView;
-        const state = GlobalState.getInstance();
-        state.setWebview(webviewView.webview);
+        const webviewPath = vscode.Uri.joinPath(context.extensionUri, 'dist', 'webview');
+        const mainScriptUri = panel.webview.asWebviewUri(vscode.Uri.joinPath(webviewPath, 'index.js'));
+        const styleUri = panel.webview.asWebviewUri(vscode.Uri.joinPath(webviewPath, 'index.css'));
 
-        webviewView.webview.options = {
-            enableScripts: true,
-            localResourceRoots: [
-                vscode.Uri.joinPath(vscode.Uri.file(__dirname), '..', 'src', 'webview'),
-                vscode.Uri.joinPath(vscode.Uri.file(__dirname), '..', 'node_modules')
-            ]
-        };
+        panel.webview.html = `<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${panel.webview.cspSource} https:; script-src ${panel.webview.cspSource} 'unsafe-inline'; style-src ${panel.webview.cspSource} 'unsafe-inline';">
+        <title>Your Copilot</title>
+        <link href="${styleUri}" rel="stylesheet">
+    </head>
+    <body>
+        <div id="root"></div>
+        <script type="module" src="${mainScriptUri}"></script>
+    </body>
+</html>`;
 
-        webviewView.webview.html = this.getWebviewContent(vscode.Uri.file(__dirname));
-
-        webviewView.webview.onDidReceiveMessage(
-            async message => {
+        panel.webview.onDidReceiveMessage(
+            message => {
                 switch (message.command) {
                     case 'your-copilot.send':
-                        await YourCopilot.sendMessage(message.text);
+                        contextService?.sendMessage(message.text);
                         return;
-
-                    case 'your-copilot.save-settings':
-                        state.updateSettings({
-                            server: message.text.server,
-                            token: message.text.token,
-                            stream: message.text.stream
-                        });
-                        return;
-
                     case 'your-copilot.search-files':
-                        const files = await FileManager.searchFiles(message.text);
-                        state.getWebview()?.postMessage({ command: 'your-copilot.file-list', files });
+                        contextService?.searchFiles(message.text);
                         return;
-
                     case 'your-copilot.get-file-content':
-                        const content = FileManager.getFileContent(message.text);
-                        state.getWebview()?.postMessage({
-                            command: 'your-copilot.file-content',
-                            text: message.text,
-                            content: content
-                        });
+                        contextService?.getFileContent(message.text);
                         return;
-
+                    case 'your-copilot.apply-code':
+                        contextService?.applyCode(message.code);
+                        return;
                     case 'your-copilot.clear-conversation':
-                        state.clearMessageHistory();
+                        contextService?.clearConversation();
                         return;
                 }
             },
-            undefined
+            undefined,
+            context.subscriptions
         );
 
-        // Send initial active editor if exists
-        const activeEditor = vscode.window.activeTextEditor;
-        if (activeEditor) {
-            try {
-                const relativePath = vscode.workspace.asRelativePath(activeEditor.document.uri);
-                const content = activeEditor.document.getText();
-                
-                console.log('Sending initial active file:', relativePath);
-                
-                webviewView.webview.postMessage({
-                    command: 'your-copilot.active-file',
-                    text: relativePath,
-                    content: content
-                });
-            } catch (error) {
-                console.error('Error sending initial active file:', error);
-            }
-        }
+        panel.onDidDispose(
+            () => {
+                panel = undefined;
+                contextService = undefined;
+            },
+            null,
+            context.subscriptions
+        );
+
+        return panel;
     }
 
-    private getWebviewContent(extensionUri: vscode.Uri): string {
-        const webviewUri = vscode.Uri.joinPath(extensionUri, '..', 'src', 'webview', 'index.html');
-        try {
-            let html = fs.readFileSync(webviewUri.fsPath, 'utf8');
-            
-            // Get webview
-            const webview = GlobalState.getInstance().getWebview();
-            if (!webview) {
-                throw new Error('Webview not initialized');
-            }
-
-            // Create URIs for local resources
-            const stylesUri = webview.asWebviewUri(
-                vscode.Uri.joinPath(extensionUri, '..', 'src', 'webview', 'styles.css')
-            );
-            const scriptUri = webview.asWebviewUri(
-                vscode.Uri.joinPath(extensionUri, '..', 'src', 'webview', 'script.js')
-            );
-
-            // Replace placeholders with actual URIs
-            html = html
-                .replace('{{STYLES_URI}}', stylesUri.toString())
-                .replace('{{SCRIPT_URI}}', scriptUri.toString());
-
-            return html;
-        } catch (error) {
-            console.error('Error reading or processing HTML file:', error);
-            return 'Error loading HTML file';
+    // Register the command handler
+    let commandDisposable = vscode.commands.registerCommand('your-copilot.start', () => {
+        if (panel) {
+            panel.reveal(vscode.ViewColumn.Two);
+        } else {
+            createWebviewPanel(vscode.ViewColumn.Two);
         }
+    });
+
+    // Register the webview view provider
+    let viewProvider = {
+        resolveWebviewView(webviewView: vscode.WebviewView) {
+            webviewView.webview.options = {
+                enableScripts: true,
+                localResourceRoots: [
+                    vscode.Uri.joinPath(context.extensionUri, 'dist', 'webview')
+                ]
+            };
+
+            contextService = new ContextService(webviewView.webview);
+
+            const webviewPath = vscode.Uri.joinPath(context.extensionUri, 'dist', 'webview');
+            const mainScriptUri = webviewView.webview.asWebviewUri(vscode.Uri.joinPath(webviewPath, 'index.js'));
+            const styleUri = webviewView.webview.asWebviewUri(vscode.Uri.joinPath(webviewPath, 'index.css'));
+
+            webviewView.webview.html = `<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${webviewView.webview.cspSource} https:; script-src ${webviewView.webview.cspSource} 'unsafe-inline'; style-src ${webviewView.webview.cspSource} 'unsafe-inline';">
+        <title>Your Copilot</title>
+        <link href="${styleUri}" rel="stylesheet">
+    </head>
+    <body>
+        <div id="root"></div>
+        <script type="module" src="${mainScriptUri}"></script>
+    </body>
+</html>`;
+
+            webviewView.webview.onDidReceiveMessage(
+                message => {
+                    switch (message.command) {
+                        case 'your-copilot.send':
+                            contextService?.sendMessage(message.text);
+                            return;
+                        case 'your-copilot.search-files':
+                            contextService?.searchFiles(message.text);
+                            return;
+                        case 'your-copilot.get-file-content':
+                            contextService?.getFileContent(message.text);
+                            return;
+                        case 'your-copilot.apply-code':
+                            contextService?.applyCode(message.code);
+                            return;
+                        case 'your-copilot.clear-conversation':
+                            contextService?.clearConversation();
+                            return;
+                    }
+                },
+                undefined,
+                context.subscriptions
+            );
+        }
+    };
+
+    context.subscriptions.push(
+        commandDisposable,
+        vscode.window.registerWebviewViewProvider('your-copilot-view', viewProvider)
+    );
+
+    // Register the active editor change event
+    vscode.window.onDidChangeActiveTextEditor(editor => {
+        if (editor && contextService) {
+            (contextService as ContextService).handleActiveFileChange(editor.document);
+        }
+    }, null, context.subscriptions);
+
+    // Also handle the initial active editor
+    if (vscode.window.activeTextEditor && contextService) {
+        (contextService as ContextService).handleActiveFileChange(vscode.window.activeTextEditor.document);
     }
+
+    // Register document change event to update file content
+    vscode.workspace.onDidChangeTextDocument(event => {
+        if (event.document === vscode.window.activeTextEditor?.document && contextService) {
+            (contextService as ContextService).handleActiveFileChange(event.document);
+        }
+    }, null, context.subscriptions);
 }
+
+export function deactivate() {}
 
 // AI Communication
 class YourCopilot {
@@ -399,24 +406,42 @@ class YourCopilot {
 
         let streamId = Date.now().toString();
         let fullMessage = '';
+        let isFirstChunk = true;
 
         const req = http.request(options, (res) => {
             res.on("data", (chunk) => {
                 try {
                     const chunkStr = chunk.toString();
-                    if (chunkStr !== 'data: [DONE]' && chunkStr.startsWith('data: ')) {
+                    if (chunkStr === 'data: [DONE]') {
+                        webview.postMessage({
+                            command: 'your-copilot.receive-stream',
+                            text: {
+                                choices: [{ delta: { content: '' } }],
+                                finish_reason: 'stop',
+                                id: streamId
+                            }
+                        });
+                        return;
+                    }
+                    
+                    if (chunkStr.startsWith('data: ')) {
                         const jsonChunk = JSON.parse(chunkStr.slice(6)); // Remove 'data: ' prefix
                         const content = jsonChunk.choices[0]?.delta?.content || '';
                         
                         if (content) {
                             fullMessage += content;
+                            
+                            // Send the chunk to the webview
                             webview.postMessage({
                                 command: 'your-copilot.receive-stream',
                                 text: {
-                                    ...jsonChunk,
-                                    id: streamId
+                                    choices: [{ delta: { content } }],
+                                    id: streamId,
+                                    isFirstChunk
                                 }
                             });
+                            
+                            isFirstChunk = false;
                         }
                     }
                 } catch (e) {
@@ -427,13 +452,6 @@ class YourCopilot {
             res.on("end", () => {
                 if (fullMessage) {
                     state.addMessage({ role: 'assistant', content: fullMessage });
-                    webview.postMessage({
-                        command: 'your-copilot.receive-stream',
-                        text: {
-                            id: streamId,
-                            finish_reason: 'stop'
-                        }
-                    });
                 }
             });
 
@@ -444,7 +462,6 @@ class YourCopilot {
                     text: error.message
                 });
                 
-                // Restore system message if there was an error
                 if (state.getMessageHistory()[0]?.role !== 'system') {
                     state.clearMessageHistory();
                 }
@@ -463,6 +480,7 @@ class YourCopilot {
             messages: messages,
             temperature: 0.7,
             max_tokens: -1,
+            model: 'gpt-3.5-turbo',
             stream: true
         }));
 
@@ -618,13 +636,23 @@ class InlineCompletionItemProvider implements vscode.InlineCompletionItemProvide
         context: vscode.InlineCompletionContext,
         token: vscode.CancellationToken
     ): Promise<vscode.InlineCompletionList | undefined> {
+        if (token.isCancellationRequested) {
+            return undefined;
+        }
+
+        // Skip if not triggered by explicit user action
+        if (!context.triggerKind) {
+            return undefined;
+        }
+
         const state = GlobalState.getInstance();
         const settings = state.getSettings();
 
         try {
+            const linePrefix = document.lineAt(position.line).text.substring(0, position.character);
             const response = await YourCopilot.predictCode(
                 settings.server,
-                `Complete and predict this code, only answer the predicted code: ${document.getText()}`
+                `Complete and predict this code, only answer the predicted code: ${linePrefix}`
             );
 
             return {
