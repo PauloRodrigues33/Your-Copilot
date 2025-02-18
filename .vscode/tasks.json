@@ -5,36 +5,40 @@
 	"tasks": [
 		{
 			"type": "npm",
-			"script": "watch",
-			"problemMatcher": "$ts-webpack-watch",
-			"isBackground": true,
-			"presentation": {
-				"reveal": "never",
-				"group": "watchers"
-			},
+			"script": "build",
 			"group": {
 				"kind": "build",
 				"isDefault": true
-			}
+			},
+			"problemMatcher": ["$tsc"],
+			"label": "npm: build",
+			"detail": "Build the extension and React frontend"
 		},
 		{
 			"type": "npm",
-			"script": "watch-tests",
-			"problemMatcher": "$tsc-watch",
+			"script": "dev",
 			"isBackground": true,
-			"presentation": {
-				"reveal": "never",
-				"group": "watchers"
-			},
-			"group": "build"
-		},
-		{
-			"label": "tasks: watch-tests",
-			"dependsOn": [
-				"npm: watch",
-				"npm: watch-tests"
+			"group": "build",
+			"problemMatcher": [
+				"$tsc-watch",
+				{
+					"pattern": [
+						{
+							"regexp": ".",
+							"file": 1,
+							"location": 2,
+							"message": 3
+						}
+					],
+					"background": {
+						"activeOnStart": true,
+						"beginsPattern": "vite",
+						"endsPattern": "ready in"
+					}
+				}
 			],
-			"problemMatcher": []
+			"label": "npm: dev",
+			"detail": "Watch and rebuild the extension and React frontend"
 		}
 	]
 }

@@ -3,6 +3,7 @@
 out/**
 node_modules/**
 src/**
+!src/webview/**
 .gitignore
 .yarnrc
 webpack.config.js
@@ -11,4 +12,5 @@ vsc-extension-quickstart.md
 **/.eslintrc.json
 **/*.map
 **/*.ts
+!src/webview/**/*.ts
 **/.vscode-test.*
