@@ -137,6 +137,7 @@ body {
     font-size: var(--vscode-editor-font-size);
 }
 
+/* Code block container */
 pre {
     position: relative;
     background-color: var(--vscode-textCodeBlock-background) !important;
@@ -146,83 +147,52 @@ pre {
     overflow: auto;
 }
 
-pre code {
-    font-family: var(--vscode-editor-font-family);
-    font-size: var(--vscode-editor-font-size);
-    line-height: 1.5;
-    counter-reset: line;
-    display: block;
-    padding-left: 50px !important;
-    position: relative;
-}
-
-.code-line {
-    position: relative;
-    display: block;
-    min-height: 1.5em;
-}
-
-.code-line:hover {
-    background-color: var(--vscode-editor-lineHighlightBackground);
-}
-
-.line-number {
+/* Code actions container */
+.code-actions {
     position: absolute;
-    left: -50px;
-    width: 40px;
-    padding-right: 10px;
-    color: var(--vscode-editorLineNumber-foreground);
-    text-align: right;
-    user-select: none;
-    opacity: 0.5;
-    border-right: 1px solid var(--vscode-widget-border);
-    margin-right: 10px;
-}
-
-.line {
-    display: inline-block;
-    padding: 0 16px;
-    min-height: 1.5em;
-    white-space: pre;
-}
-
-pre code .line {
-    width: fit-content;
-    min-width: calc(100% - 32px);
-}
-
-/* Ensure long lines can be scrolled horizontally */
-pre {
-    overflow-x: auto;
-}
-
-pre code {
-    min-width: fit-content;
-}
-
-/* Adjust copy button position */
-.copy-button {
-    position: absolute;
-    top: 8px;
-    right: 8px;
-    background-color: var(--vscode-button-background);
-    color: var(--vscode-button-foreground);
-    border: none;
-    border-radius: 4px;
-    padding: 4px 8px;
-    font-size: 12px;
-    cursor: pointer;
+    top: 4px;
+    right: 4px;
+    display: flex;
+    gap: 4px;
     opacity: 0;
-    transition: opacity 0.2s;
-    z-index: 1;
+    transition: opacity 0.2s ease;
+    z-index: 2;
 }
 
-pre:hover .copy-button {
+pre:hover .code-actions {
     opacity: 1;
 }
 
-.copy-button:hover {
+/* Individual code action buttons */
+.code-action-btn {
+    background-color: var(--vscode-button-background);
+    color: var(--vscode-button-foreground);
+    border: none;
+    border-radius: 3px;
+    padding: 2px 6px;
+    font-size: 11px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    transition: background-color 0.2s ease;
+    height: 20px;
+    min-width: 50px;
+}
+
+.code-action-btn:hover {
     background-color: var(--vscode-button-hoverBackground);
+}
+
+.code-action-btn svg {
+    width: 12px;
+    height: 12px;
+    fill: currentColor;
+}
+
+/* Remove old copy button styles */
+.copy-button {
+    display: none;
 }
 
 /* Token colors */
@@ -460,57 +430,177 @@ textarea {
 }
 
 .settings-dialog {
-    background-color: var(--vscode-editor-background);
-    color: var(--vscode-foreground);
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 1000;
+    background: var(--vscode-editor-background);
     border: 1px solid var(--vscode-widget-border);
-    border-radius: 6px;
+    border-radius: 8px;
     padding: 0;
-    max-width: 500px;
     width: 90%;
-    margin: 20px auto;
-    box-sizing: border-box;
+    max-width: 600px;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
 .settings-dialog::backdrop {
-    background-color: rgba(0, 0, 0, 0.5);
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(2px);
 }
 
 .settings-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 16px;
+    padding: 16px 20px;
     border-bottom: 1px solid var(--vscode-widget-border);
-    box-sizing: border-box;
+    background: var(--vscode-titleBar-activeBackground);
+    border-radius: 8px 8px 0 0;
 }
 
 .settings-header h2 {
     margin: 0;
-    font-size: 1.2em;
+    color: var(--vscode-titleBar-activeForeground);
+    font-size: 16px;
+    font-weight: 600;
 }
 
 .close-btn {
     background: none;
     border: none;
-    color: var(--vscode-foreground);
-    font-size: 1.5em;
+    color: var(--vscode-titleBar-activeForeground);
+    font-size: 18px;
     cursor: pointer;
-    padding: 0 8px;
+    padding: 4px 8px;
+    border-radius: 4px;
+    line-height: 1;
+    opacity: 0.8;
+    transition: all 0.2s ease;
+}
+
+.close-btn:hover {
+    opacity: 1;
+    background: var(--vscode-toolbar-hoverBackground);
 }
 
 .settings-content {
-    padding: 16px;
-    box-sizing: border-box;
+    color: var(--vscode-foreground);
+    padding: 20px;
+    overflow-x: hidden;
+}
+
+.settings-content p {
+    margin: 0 0 8px 0;
+    color: var(--vscode-descriptionForeground);
+    padding-right: 20px;
+}
+
+.settings-content ul {
+    margin: 0 0 20px 0;
+    padding-left: 24px;
+    padding-right: 20px;
+    color: var(--vscode-descriptionForeground);
+}
+
+.settings-content li {
+    margin-bottom: 4px;
 }
 
 .input-control {
-    margin-bottom: 16px;
-    box-sizing: border-box;
+    margin-bottom: 20px;
+    background: var(--vscode-editor-background);
+    border-radius: 6px;
+    transition: all 0.2s ease;
+}
+
+.input-control:last-child {
+    margin-bottom: 0;
 }
 
 .input-control label {
     display: block;
     margin-bottom: 8px;
+    color: var(--vscode-foreground);
+    font-weight: 500;
+}
+
+.input-control .input {
+    width: calc(100% - 24px);
+    padding: 8px 12px;
+    background: var(--vscode-input-background);
+    color: var(--vscode-input-foreground);
+    border: 1px solid var(--vscode-input-border, transparent);
+    border-radius: 4px;
+    font-size: 13px;
+    transition: all 0.2s ease;
+}
+
+.input-control .input:hover {
+    border-color: var(--vscode-input-border);
+}
+
+.input-control .input:focus {
+    outline: none;
+    border-color: var(--vscode-focusBorder);
+    box-shadow: 0 0 0 1px var(--vscode-focusBorder);
+}
+
+.input-control small {
+    display: block;
+    margin-top: 6px;
+    color: var(--vscode-descriptionForeground);
+    font-size: 12px;
+}
+
+.input-control.number-input {
+    display: flex;
+    flex-direction: column;
+}
+
+.input-control.number-input .input {
+    width: 120px;
+}
+
+.label-check {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    padding: 8px 0;
+    user-select: none;
+}
+
+.label-check:hover {
+    color: var(--vscode-button-foreground);
+}
+
+.input-check {
+    margin: 0;
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+}
+
+.settings-section {
+    margin-bottom: 24px;
+    padding-bottom: 24px;
+    border-bottom: 1px solid var(--vscode-widget-border);
+}
+
+.settings-section:last-child {
+    margin-bottom: 0;
+    padding-bottom: 0;
+    border-bottom: none;
+}
+
+.settings-section-title {
+    margin: 0 0 16px 0;
+    color: var(--vscode-foreground);
+    font-size: 14px;
+    font-weight: 600;
 }
 
 .chat-header {

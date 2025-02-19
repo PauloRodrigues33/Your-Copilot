@@ -1,697 +1,711 @@
-var vscodeContext = acquireVsCodeApi();
+// Initialize VSCode API
+const vscodeContext = acquireVsCodeApi();
 console.log('Main script loaded');
 
-var converter = new showdown.Converter();
+// Initialize showdown converter
+const converter = new showdown.Converter();
 converter.setFlavor('github');
 
-// Add message event listener
-window.addEventListener('message', event => {
-    const message = event.data;
-    
-    switch (message.command) {
-        case 'your-copilot.receive':
-            updateHtmlChat('left', message.text);
-            break;
-        case 'your-copilot.receive-stream':
-            updateHtmlChat('left', message.text, true);
-            break;
-        case 'your-copilot.file-list':
-            showFileDropdown(message.files);
-            break;
-        case 'your-copilot.file-content':
-            referencedFiles.set(message.text, message.content);
-            updateReferencedFiles();
-            break;
-        case 'your-copilot.active-file':
-            handleActiveFileChange(message.text, message.content);
-            break;
-        case 'your-copilot.error':
-            console.error('Error:', message.text);
-            break;
-    }
-});
-
-try {
-    //get the state if exists:
-    var state = vscodeContext.getState();
-    if (state) {
-        document.getElementById('ipAddress').value = state.server;
-        document.getElementById('token').value = state.token;
-        document.getElementById('stream').checked = state.stream;
-    }
-}
-catch (e) {
-    console.error('Error getting state:', e);
-}
-
-function toggleOnBtnHover() {
-    if (!configurationValidated()) {
-        document.getElementById('error').style.display = 'block';
-    }
-    else {
-        document.getElementById('error').style.display = 'none';
-    }
-}
-
-function configurationValidated() {
-    var ipAddress = document.getElementById('ipAddress').value;
-    if (ipAddress.length > 0) {
-        return true;
-    } else {
-        return false;
-    }
-}
-
-function validateInput() {
-    var input = document.getElementById('in-text').value;
-    if (input.length > 0) {
-        document.getElementById('btn').disabled = false;
-    } else {
-        document.getElementById('btn').disabled = true;
-    }
-}
-
-var lastAtPosition = -1;
-var selectedFileIndex = -1;
-var fileList = [];
-var referencedFiles = new Map(); // Map to store file references: path -> content
-var isStreaming = false;
-var chatStreamingElement = null;
-var originalChat = document.getElementById('chat');
-
-function handleInput(event) {
-    const textarea = event.target;
-    const text = textarea.value;
-    const cursorPosition = textarea.selectionStart;
-    
-    // Find the last @ before the cursor
-    const beforeCursor = text.substring(0, cursorPosition);
-    const afterCursor = text.substring(cursorPosition);
-    
-    // Find the word being typed after the last @
-    const lastAtIndex = beforeCursor.lastIndexOf('@');
-    if (lastAtIndex === -1) {
-        hideFileDropdown();
-        return;
-    }
-
-    // Get the text between the last @ and the cursor
-    const currentWord = beforeCursor.slice(lastAtIndex + 1);
-    
-    // Check if we're actually in a file reference context
-    // If there's a space or newline in the current word, we're not
-    if (/[\s\n]/.test(currentWord)) {
-        hideFileDropdown();
-        return;
-    }
-
-    // Only search if we have at least one character after @
-    if (currentWord.length > 0) {
-        lastAtPosition = lastAtIndex;
-        vscodeContext.postMessage({
-            command: 'your-copilot.search-files',
-            text: currentWord
-        });
-    } else {
-        hideFileDropdown();
-    }
-}
-
-function handleKeyPress(event) {
-    const dropdown = document.getElementById('file-dropdown');
-    
-    if (dropdown.style.display === 'block') {
-        switch (event.key) {
-            case 'ArrowDown':
-                event.preventDefault();
-                selectedFileIndex = Math.min(selectedFileIndex + 1, fileList.length - 1);
-                updateFileSelection();
-                break;
-            case 'ArrowUp':
-                event.preventDefault();
-                selectedFileIndex = Math.max(selectedFileIndex - 1, 0);
-                updateFileSelection();
-                break;
-            case 'Enter':
-                if (selectedFileIndex !== -1) {
-                    event.preventDefault();
-                    selectFile(fileList[selectedFileIndex]);
-                }
-                break;
-            case 'Escape':
-            case 'Tab':
-                event.preventDefault();
-                hideFileDropdown();
-                break;
-        }
-    } else if (event.key === 'Enter' && !event.shiftKey) {
-        event.preventDefault();
-        if (document.getElementById('in-text').value.trim() && configurationValidated()) {
-            sendMessage();
-        }
-    }
-}
-
-function updateFileSelection() {
-    const items = document.querySelectorAll('.file-item');
-    items.forEach((item, index) => {
-        if (index === selectedFileIndex) {
-            item.classList.add('selected');
-        } else {
-            item.classList.remove('selected');
-        }
-    });
-}
-
-function showFileDropdown(files) {
-    const dropdown = document.getElementById('file-dropdown');
-    fileList = files;
-    selectedFileIndex = files.length > 0 ? 0 : -1;
-    
-    dropdown.innerHTML = '';
-    if (files.length === 0) {
-        const item = document.createElement('div');
-        item.className = 'file-item no-results';
-        item.textContent = 'No files found';
-        dropdown.appendChild(item);
-    } else {
-        files.forEach((file, index) => {
-            const item = document.createElement('div');
-            item.className = 'file-item' + (index === 0 ? ' selected' : '');
-            item.textContent = file;
-            item.onclick = () => selectFile(file);
-            dropdown.appendChild(item);
-        });
-    }
-    
-    dropdown.style.display = 'block';
-}
-
-function hideFileDropdown() {
-    const dropdown = document.getElementById('file-dropdown');
-    dropdown.style.display = 'none';
-    lastAtPosition = -1;
-    selectedFileIndex = -1;
-    fileList = [];
-}
-
-function selectFile(file) {
-    const textarea = document.getElementById('in-text');
-    const text = textarea.value;
-    
-    // Get the text before and after the current file reference
-    const beforeAt = text.substring(0, lastAtPosition);
-    const afterCursor = text.substring(textarea.selectionStart);
-    
-    // Request file content
-    vscodeContext.postMessage({
-        command: 'your-copilot.get-file-content',
-        text: file
-    });
-    
-    // Update textarea with file reference and add a space
-    const fileName = getFileName(file);
-    textarea.value = beforeAt + '@' + fileName + ' ' + afterCursor;
-    
-    // Move cursor after the file reference and space
-    const newCursorPosition = lastAtPosition + fileName.length + 2;
-    textarea.setSelectionRange(newCursorPosition, newCursorPosition);
-    
-    hideFileDropdown();
-    textarea.focus();
-}
-
-function getFileName(path) {
-    return path.split('/').pop();
-}
-
-function updateReferencedFiles() {
-    const container = document.getElementById('referenced-files');
-    container.innerHTML = '';
-    
-    referencedFiles.forEach((content, path) => {
-        const fileChip = document.createElement('div');
-        fileChip.className = 'file-chip';
-        fileChip.title = path; // Show full path on hover
-        
-        const fileName = document.createElement('span');
-        fileName.textContent = getFileName(path);
-        
-        const removeButton = document.createElement('button');
-        removeButton.className = 'remove-file';
-        removeButton.textContent = '×';
-        removeButton.onclick = () => {
-            // Remove reference from textarea
-            const textarea = document.getElementById('in-text');
-            const fileRef = `@${getFileName(path)}`;
-            textarea.value = textarea.value.replace(fileRef, '').trim();
-            
-            // Remove from map and update UI
-            referencedFiles.delete(path);
-            updateReferencedFiles();
-            validateInput();
-        };
-        
-        fileChip.appendChild(fileName);
-        fileChip.appendChild(removeButton);
-        container.appendChild(fileChip);
-    });
-    
-    // Update container visibility
-    container.style.display = referencedFiles.size > 0 ? 'flex' : 'none';
-}
-
-function addFileReference(filePath, content) {
-    if (!filePath || !content) {
-        console.log('Invalid file data:', { filePath, hasContent: !!content });
-        return false;
-    }
-
-    const fileRef = `@${getFileName(filePath)}`;
-    
-    // Check if file is already referenced
-    if (referencedFiles.has(filePath)) {
-        console.log('File already referenced:', filePath);
-        return false;
-    }
-
-    // Add to references map
-    referencedFiles.set(filePath, content);
-    console.log('Added file reference:', { filePath, fileRef });
-    
-    return true;
-}
-
-function insertFileReferenceIntoTextarea(fileRef) {
-    const textarea = document.getElementById('in-text');
-    const currentText = textarea.value;
-    const cursorPosition = textarea.selectionStart;
-    
-    // Add newlines only if needed
-    const beforeCursor = currentText.substring(0, cursorPosition);
-    const afterCursor = currentText.substring(cursorPosition);
-    const prefix = beforeCursor.length > 0 && !beforeCursor.endsWith('\n') ? '\n' : '';
-    const suffix = afterCursor.length > 0 && !afterCursor.startsWith('\n') ? '\n' : '';
-    
-    textarea.value = beforeCursor + prefix + fileRef + suffix + afterCursor;
-    validateInput();
-}
-
-function handleActiveFileChange(filePath, content) {
-    if (!filePath || !content) {
-        console.log('Invalid file data:', { filePath, hasContent: !!content });
-        return;
-    }
-    
-    console.log('Processing active file:', {
-        filePath,
-        hasContent: !!content,
-        currentReferences: Array.from(referencedFiles.keys())
-    });
-    
-    const fileRef = `@${getFileName(filePath)}`;
-    const textarea = document.getElementById('in-text');
-    
-    // Only add if the file isn't already referenced and the reference isn't in the textarea
-    if (!textarea.value.includes(fileRef) && addFileReference(filePath, content)) {
-        insertFileReferenceIntoTextarea(fileRef);
-        updateReferencedFiles();
-    }
-}
-
-function sendMessage() {
-    var message = document.getElementById('in-text').value;
-    if (message.length == 0) return;
-
-    // Process message to include file contents
-    let finalMessage = message;
-    let hasFileReferences = false;
-
-    // Create an array of file references to process them in order
-    const fileRefs = [];
-    referencedFiles.forEach((content, path) => {
-        const fileRef = `@${getFileName(path)}`;
-        if (finalMessage.includes(fileRef)) {
-            fileRefs.push({ ref: fileRef, path, content });
-            hasFileReferences = true;
-        }
-    });
-
-    // Process each file reference
-    fileRefs.forEach(({ ref, path, content }) => {
-        finalMessage = finalMessage.replace(ref, `\nFile: ${path}\n\`\`\`\n${content}\n\`\`\`\n`);
-    });
-
-    // Show original message in chat (without file contents)
-    updateHtmlChat('right', message);
-
-    // Ensure the chat elements are visible
-    document.getElementById('chat').style.display = 'block';
-    document.getElementById('chat-right').style.display = 'block';
-
-    vscodeContext.postMessage({
-        command: 'your-copilot.send',
-        text: { 
-            server: document.getElementById('ipAddress').value, 
-            message: finalMessage, 
-            token: document.getElementById('token').value, 
-            stream: document.getElementById('stream').checked 
-        }
-    });
-
-    // reset the input and references
-    document.getElementById('in-text').value = "";
-    referencedFiles.clear();
-    updateReferencedFiles();
-    validateInput(); // Update button state
-    
-    vscodeContext.setState({ 
-        server: document.getElementById('ipAddress').value, 
-        token: document.getElementById('token').value, 
-        stream: document.getElementById('stream').checked 
-    });
-}
-
-function updateHtmlChat(side, message, stream = false) {
-    const now = new Date();
-    const timeString = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    
-    if (side === "left") {
-        let chatElem = originalChat.cloneNode(true);
-        chatElem.style.display = 'block';
-        chatElem.id = 'chat-' + Date.now(); // Ensure unique ID
-        
-        if (!stream) {
-            console.log('Processing non-stream message');
-            const chatWrapper = document.getElementById('chat-wrapper');
-            const newMessage = chatWrapper.appendChild(chatElem);
-            
-            try {
-                const html = converter.makeHtml(message || '');
-                const messageBody = newMessage.querySelector('.message-body');
-                if (messageBody) {
-                    messageBody.innerHTML = html;
-                    applyCodeHighlighting(messageBody);
-                } else {
-                    console.error('Message body element not found');
-                }
-            } catch (error) {
-                console.error('Error converting message to HTML:', error);
-                const messageBody = newMessage.querySelector('.message-body');
-                if (messageBody) {
-                    messageBody.textContent = message || '';
-                }
-            }
-            
-            newMessage.scrollIntoView({ behavior: 'smooth', block: 'end' });
-        } else {
-            if (!isStreaming) {
-                console.log('Starting new stream');
-                const chatWrapper = document.getElementById('chat-wrapper');
-                const newMessage = chatWrapper.appendChild(chatElem);
-                const messageBody = newMessage.querySelector('.message-body');
-                
-                if (messageBody) {
-                    const renderedContainer = document.createElement('div');
-                    renderedContainer.id = 'rendered-content-' + message.id;
-                    messageBody.innerHTML = '';
-                    messageBody.appendChild(renderedContainer);
-                    
-                    if (!window.streamingState) {
-                        window.streamingState = new Map();
-                    }
-                    
-                    window.streamingState.set(message.id, {
-                        rawContent: '',
-                        codeBlocks: [],
-                        inCodeBlock: false,
-                        codeBlockLang: '',
-                        codeBlockContent: '',
-                        inBackticks: false,
-                        backtickCount: 0
-                    });
-                    
-                    const content = message?.choices[0]?.delta?.content || '';
-                    updateStreamingContent(message.id, content);
-                    isStreaming = true;
-                    
-                    newMessage.scrollIntoView({ behavior: 'smooth', block: 'end' });
-                } else {
-                    console.error('Message body element not found for streaming message');
-                }
-            } else {
-                if (message.finish_reason != null) {
-                    console.log('Stream finished');
-                    const state = window.streamingState.get(message.id);
-                    if (state && state.inCodeBlock) {
-                        state.rawContent += '```';
-                        updateStreamingContent(message.id, '');
-                    }
-                    
-                    isStreaming = false;
-                    chatStreamingElement = null;
-                    window.streamingState.delete(message.id);
-                } else {
-                    const content = message?.choices[0]?.delta?.content || '';
-                    if (content) {
-                        updateStreamingContent(message.id, content);
-                    }
-                }
-            }
-        }
-        
-        const timeElement = chatElem.querySelector('.message-time');
-        if (timeElement) {
-            timeElement.textContent = timeString;
-        }
-    } else if (side === "right") {
-        let chatElem = document.getElementById('chat-right').cloneNode(true);
-        chatElem.style.display = 'block';
-        chatElem.id = 'chat-right-' + Date.now(); // Ensure unique ID
-        
-        const chatWrapper = document.getElementById('chat-wrapper');
-        const newMessage = chatWrapper.appendChild(chatElem);
-        
-        const messageBody = newMessage.querySelector('.message-body');
-        if (messageBody) {
-            messageBody.innerHTML = `<p id="message-element">${message}</p>`;
-        }
-        
-        const timeElement = newMessage.querySelector('.message-time');
-        if (timeElement) {
-            timeElement.textContent = timeString;
-        }
-        
-        newMessage.scrollIntoView({ behavior: 'smooth', block: 'end' });
-    }
-}
-
-function updateStreamingContent(messageId, newContent) {
-    const state = window.streamingState.get(messageId);
-    if (!state) return;
-
-    // Update raw content
-    state.rawContent += newContent;
-    
-    // Process the content
-    for (const char of newContent) {
-        if (state.inCodeBlock) {
-            if (char === '`') {
-                state.backtickCount++;
-                if (state.backtickCount === 3) {
-                    state.inCodeBlock = false;
-                    state.backtickCount = 0;
-                    state.codeBlocks.push({
-                        language: state.codeBlockLang,
-                        content: state.codeBlockContent
-                    });
-                    state.codeBlockLang = '';
-                    state.codeBlockContent = '';
-                }
-            } else {
-                state.backtickCount = 0;
-                if (state.codeBlockLang === '' && char !== '\n') {
-                    state.codeBlockLang += char;
-                } else if (char === '\n' && state.codeBlockLang !== '') {
-                    state.codeBlockContent += char;
-                } else {
-                    state.codeBlockContent += char;
-                }
-            }
-        } else {
-            if (char === '`') {
-                state.backtickCount++;
-                if (state.backtickCount === 3) {
-                    state.inCodeBlock = true;
-                    state.backtickCount = 0;
-                }
-            } else {
-                state.backtickCount = 0;
-            }
-        }
-    }
-
-    // Try to convert the content to HTML
-    try {
-        let htmlContent = converter.makeHtml(state.rawContent);
-        
-        // If we're in the middle of a code block, append the current incomplete block
-        if (state.inCodeBlock) {
-            htmlContent += `<pre><code class="language-${state.codeBlockLang}">${state.codeBlockContent}</code></pre>`;
-        }
-
-        const renderedContainer = document.getElementById('rendered-content-' + messageId);
-        if (renderedContainer) {
-            renderedContainer.innerHTML = htmlContent;
-            
-            // Apply syntax highlighting to all code blocks
-            applyCodeHighlighting(renderedContainer);
-        }
-    } catch (error) {
-        console.error('Error converting markdown:', error);
-        // In case of error, just show the raw content
-        const renderedContainer = document.getElementById('rendered-content-' + messageId);
-        if (renderedContainer) {
-            renderedContainer.textContent = state.rawContent;
-        }
-    }
-}
-
-function applyCodeHighlighting(container) {
-    container.querySelectorAll('pre code').forEach((block) => {
+// React Components
+const App = () => {
+    const [messages, setMessages] = React.useState([
+        { side: 'right', text: 'Hi Copilot!', time: new Date() },
+        { side: 'left', text: "Hi, I'm Your Copilot", time: new Date() }
+    ]);
+    const [fileList, setFileList] = React.useState([]);
+    const [selectedFileIndex, setSelectedFileIndex] = React.useState(-1);
+    const [lastAtPosition, setLastAtPosition] = React.useState(-1);
+    const [referencedFiles, setReferencedFiles] = React.useState(new Map());
+    const [isStreaming, setIsStreaming] = React.useState(false);
+    const [settings, setSettings] = React.useState(() => {
         try {
-            // Try to detect language from class
-            const classes = block.className.split(' ');
-            const languageClass = classes.find(c => c.startsWith('language-'));
-            const language = languageClass ? languageClass.replace('language-', '') : '';
-            
-            // Get the code content
-            const content = block.textContent;
-            
-            // Create line numbers and code content
-            const lines = content.split('\n');
-            const codeLines = lines.map((line, index) => {
-                const lineNumber = document.createElement('span');
-                lineNumber.className = 'line-number';
-                lineNumber.textContent = (index + 1).toString();
-                
-                const codeLine = document.createElement('span');
-                codeLine.className = 'line';
-                codeLine.textContent = line;
-                
-                const wrapper = document.createElement('div');
-                wrapper.className = 'code-line';
-                wrapper.appendChild(lineNumber);
-                wrapper.appendChild(codeLine);
-                
-                return wrapper.outerHTML;
-            }).join('');
-            
-            block.innerHTML = codeLines;
-            
-            // Apply Prism highlighting if language is supported
-            if (language && Prism.languages[language]) {
-                const highlightedCode = Prism.highlight(
-                    content,
-                    Prism.languages[language],
-                    language
-                );
-                
-                // Replace the code content while preserving line numbers
-                block.querySelectorAll('.line').forEach((line, index) => {
-                    const highlightedLine = highlightedCode.split('\n')[index] || '';
-                    line.innerHTML = highlightedLine;
+            const state = vscodeContext.getState() || {};
+            return {
+                server: state.server || '',
+                token: state.token || '',
+                stream: state.stream || false,
+                max_tokens: state.max_tokens || 4096,
+                temperature: state.temperature || 0.7
+            };
+        } catch (e) {
+            console.error('Error getting state:', e);
+            return { 
+                server: '', 
+                token: '', 
+                stream: false,
+                max_tokens: 4096,
+                temperature: 0.7
+            };
+        }
+    });
+    const [showSettings, setShowSettings] = React.useState(false);
+    const [showError, setShowError] = React.useState(false);
+    const textareaRef = React.useRef(null);
+    const chatWrapperRef = React.useRef(null);
+
+    React.useEffect(() => {
+        window.addEventListener('message', handleMessage);
+        return () => window.removeEventListener('message', handleMessage);
+    }, []);
+
+    const handleMessage = (event) => {
+        const message = event.data;
+        if (!message || !message.command) return;
+        
+        switch (message.command) {
+            case 'your-copilot.receive':
+                if (message.text) {
+                    updateChat('left', message.text);
+                    setIsStreaming(false);
+                }
+                break;
+            case 'your-copilot.receive-stream':
+                if (message.text) {
+                    if (typeof message.text === 'object' && message.text.finish_reason === 'stop') {
+                        setIsStreaming(false);
+                    } else {
+                        setIsStreaming(true);
+                        updateChat('left', message.text, true);
+                    }
+                }
+                break;
+            case 'your-copilot.file-list':
+                if (Array.isArray(message.files)) {
+                    setFileList(message.files);
+                    setSelectedFileIndex(message.files.length > 0 ? 0 : -1);
+                }
+                break;
+            case 'your-copilot.file-content':
+                if (message.text && message.content) {
+                    setReferencedFiles(prev => {
+                        const newMap = new Map(prev);
+                        newMap.set(message.text, message.content);
+                        return newMap;
+                    });
+                }
+                break;
+            case 'your-copilot.active-file':
+                if (message.text && message.content) {
+                    handleActiveFileChange(message.text, message.content);
+                }
+                break;
+            case 'your-copilot.error':
+                if (message.text) {
+                    console.error('Error:', message.text);
+                }
+                break;
+        }
+    };
+
+    const updateChat = (side, message, stream = false) => {
+        if (stream) {
+            setMessages(prev => {
+                const newMessages = [...prev];
+                const lastMessage = newMessages[newMessages.length - 1];
+                if (lastMessage && lastMessage.side === side) {
+                    lastMessage.text += message;
+                } else {
+                    newMessages.push({ side, text: message, time: new Date() });
+                }
+                return newMessages;
+            });
+        } else {
+            setMessages(prev => [...prev, { side, text: message, time: new Date() }]);
+        }
+        
+        // Scroll to bottom after render
+        setTimeout(() => {
+            if (chatWrapperRef.current) {
+                chatWrapperRef.current.scrollTop = chatWrapperRef.current.scrollHeight;
+            }
+        }, 0);
+    };
+
+    const handleInput = (event) => {
+        const textarea = event.target;
+        const text = textarea.value;
+        const cursorPosition = textarea.selectionStart;
+        
+        const beforeCursor = text.substring(0, cursorPosition);
+        const lastAtIndex = beforeCursor.lastIndexOf('@');
+        
+        if (lastAtIndex === -1) {
+            setFileList([]);
+            return;
+        }
+
+        const currentWord = beforeCursor.slice(lastAtIndex + 1);
+        
+        if (/[\s\n]/.test(currentWord)) {
+            setFileList([]);
+            return;
+        }
+
+        if (currentWord.length > 0) {
+            setLastAtPosition(lastAtIndex);
+            vscodeContext.postMessage({
+                command: 'your-copilot.search-files',
+                text: currentWord
+            });
+        } else {
+            setFileList([]);
+        }
+    };
+
+    const handleKeyPress = (event) => {
+        if (fileList.length > 0) {
+            switch (event.key) {
+                case 'ArrowDown':
+                    event.preventDefault();
+                    setSelectedFileIndex(prev => Math.min(prev + 1, fileList.length - 1));
+                    break;
+                case 'ArrowUp':
+                    event.preventDefault();
+                    setSelectedFileIndex(prev => Math.max(prev - 1, 0));
+                    break;
+                case 'Enter':
+                    if (selectedFileIndex !== -1) {
+                        event.preventDefault();
+                        selectFile(fileList[selectedFileIndex]);
+                    }
+                    break;
+                case 'Escape':
+                case 'Tab':
+                    event.preventDefault();
+                    setFileList([]);
+                    break;
+            }
+        } else if (event.key === 'Enter' && !event.shiftKey) {
+            event.preventDefault();
+            const textarea = textareaRef.current;
+            if (textarea && textarea.value && textarea.value.trim() && settings.server) {
+                sendMessage();
+            }
+        }
+    };
+
+    const selectFile = (file) => {
+        if (!file) return;
+
+        const textarea = textareaRef.current;
+        if (!textarea) return;
+
+        const text = textarea.value;
+        if (typeof lastAtPosition !== 'number') return;
+        
+        const beforeAt = text.substring(0, lastAtPosition);
+        const afterCursor = text.substring(textarea.selectionStart);
+        
+        vscodeContext.postMessage({
+            command: 'your-copilot.get-file-content',
+            text: file
+        });
+        
+        const fileName = getFileName(file);
+        if (!fileName) return;
+
+        textarea.value = beforeAt + '@' + fileName + ' ' + afterCursor;
+        
+        const newCursorPosition = lastAtPosition + fileName.length + 2;
+        textarea.setSelectionRange(newCursorPosition, newCursorPosition);
+        
+        setFileList([]);
+        textarea.focus();
+    };
+
+    const handleActiveFileChange = (filePath, content) => {
+        if (!filePath || !content) return;
+
+        const textarea = textareaRef.current;
+        if (!textarea) return;
+
+        const fileName = getFileName(filePath);
+        if (!fileName) return;
+
+        const fileRef = `@${fileName}`;
+        const currentValue = textarea.value || '';
+        
+        if (!currentValue.includes(fileRef)) {
+            textarea.value = currentValue + (currentValue ? ' ' : '') + fileRef;
+        }
+        
+        setReferencedFiles(prev => {
+            const newMap = new Map(prev);
+            newMap.set(filePath, content);
+            return newMap;
+        });
+    };
+
+    const sendMessage = () => {
+        if (!settings.server) {
+            setShowError(true);
+            return;
+        }
+
+        // Validate and format server URL
+        let serverUrl = settings.server;
+        try {
+            // Add protocol if missing
+            if (!serverUrl.startsWith('http://') && !serverUrl.startsWith('https://')) {
+                serverUrl = 'http://' + serverUrl;
+            }
+            // Test if it's a valid URL
+            new URL(serverUrl);
+        } catch (error) {
+            console.error('Invalid server URL:', error);
+            setShowError(true);
+            updateChat('left', 'Error: Invalid server URL. Please check your settings and make sure to include the protocol (http:// or https://)');
+            return;
+        }
+
+        const textarea = textareaRef.current;
+        if (!textarea) return;
+
+        const input = textarea.value.trim();
+        if (!input) return;
+
+        updateChat('right', input);
+        
+        const fileRefs = [];
+        const fileContents = {};
+        
+        try {
+            if (referencedFiles.size > 0) {
+                referencedFiles.forEach((content, path) => {
+                    if (path && content) {
+                        const fileName = getFileName(path);
+                        if (fileName && input.includes(`@${fileName}`)) {
+                            fileRefs.push(path);
+                            fileContents[path] = content;
+                        }
+                    }
                 });
             }
-            
-            // Add copy button to the pre element
-            const pre = block.parentElement;
-            if (pre && !pre.querySelector('.copy-button')) {
-                const copyButton = document.createElement('button');
-                copyButton.className = 'copy-button';
-                copyButton.innerHTML = 'Copy';
-                copyButton.onclick = () => {
-                    navigator.clipboard.writeText(content);
-                    copyButton.innerHTML = 'Copied!';
-                    setTimeout(() => copyButton.innerHTML = 'Copy', 2000);
-                };
-                pre.appendChild(copyButton);
+
+            const message = {
+                command: 'your-copilot.send',
+                text: {
+                    server: serverUrl,
+                    message: input,
+                    token: settings.token || '',
+                    stream: Boolean(settings.stream),
+                    fileRefs,
+                    fileContents
+                }
+            };
+
+            vscodeContext.postMessage(message);
+            textarea.value = '';
+            setReferencedFiles(new Map());
+        } catch (error) {
+            console.error('Error sending message:', error);
+            updateChat('left', 'Error sending message. Please try again.');
+        }
+    };
+
+    const toggleSettings = () => {
+        setShowSettings(!showSettings);
+    };
+
+    const updateSettings = (newSettings) => {
+        // Validate and format server URL
+        let serverUrl = newSettings.server;
+        try {
+            // Add protocol if missing
+            if (serverUrl && !serverUrl.startsWith('http://') && !serverUrl.startsWith('https://')) {
+                serverUrl = 'http://' + serverUrl;
+                newSettings.server = serverUrl;
+            }
+            // Test if it's a valid URL
+            if (serverUrl) {
+                new URL(serverUrl);
             }
         } catch (error) {
-            console.error('Error applying code highlighting:', error);
+            console.error('Invalid server URL:', error);
+            updateChat('left', 'Warning: Invalid server URL format. Please include the protocol (http:// or https://)');
         }
-    });
-}
 
-function toggleSettings() {
-    const dialog = document.getElementById('settings-dialog');
-    if (dialog.open) {
-        dialog.close();
-    } else {
-        dialog.showModal();
-    }
-}
+        setSettings(newSettings);
+        vscodeContext.setState(newSettings);
+    };
 
-// Add event listener for ESC key to close dialog
-document.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape') {
-        const dialog = document.getElementById('settings-dialog');
-        if (dialog.open) {
-            dialog.close();
+    const clearConversation = () => {
+        setMessages([]);
+        if (textareaRef.current) {
+            textareaRef.current.value = '';
         }
-    }
-});
+        setReferencedFiles(new Map());
+    };
 
-// Save settings when dialog is closed
-document.getElementById('settings-dialog').addEventListener('close', () => {
-    if (configurationValidated()) {
-        vscodeContext.setState({ 
-            server: document.getElementById('ipAddress').value, 
-            token: document.getElementById('token').value, 
-            stream: document.getElementById('stream').checked 
-        });
-    }
-});
-
-function clearConversation() {
-    // Clear the chat wrapper
-    const chatWrapper = document.getElementById('chat-wrapper');
-    chatWrapper.innerHTML = `<div class="chat-message user-message" id="chat-right">
-                <div class="message-content">
-                    <div class="message-header">
-                        <span class="avatar">You</span>
-                        <span class="message-time"></span>
-                    </div>
-                    <div class="message-body">
-                        <p id="message-element">Hi Copilot!</p>
+    return (
+        <React.Fragment>
+            <div className="chat-container">
+                <div className="chat-wrapper-wrapper">
+                    <div className="chat-wrapper" ref={chatWrapperRef}>
+                        {messages.map((msg, index) => (
+                            <ChatMessage key={index} {...msg} />
+                        ))}
                     </div>
                 </div>
             </div>
-            <div class="chat-message assistant-message" id="chat">
-                <div class="message-content">
-                    <div class="message-header">
-                        <div class="avatar-container">
-                            <span class="avatar-icon">🤖</span>
-                            <span class="avatar">AI</span>
-                        </div>
-                        <span class="message-time"></span>
+
+            <div className="chat-type-container">
+                <div className="chat-type-container-wrapper">
+                    <ReferencedFiles 
+                        files={referencedFiles} 
+                        onRemove={(path) => {
+                            if (textareaRef.current) {
+                                const fileRef = `@${getFileName(path)}`;
+                                textareaRef.current.value = textareaRef.current.value.replace(fileRef, '').trim();
+                            }
+                            setReferencedFiles(prev => {
+                                const newMap = new Map(prev);
+                                newMap.delete(path);
+                                return newMap;
+                            });
+                        }}
+                    />
+                    <div className="textarea-container">
+                        <textarea
+                            ref={textareaRef}
+                            onChange={() => setShowError(false)}
+                            onKeyDown={handleKeyPress}
+                            onInput={handleInput}
+                        />
+                        {fileList.length > 0 && (
+                            <FileDropdown
+                                files={fileList}
+                                selectedIndex={selectedFileIndex}
+                                onSelect={selectFile}
+                            />
+                        )}
                     </div>
-                    <div class="message-body">
-                        <p id="message-element">Hi, I'm Your Copilot</p>
+                    <div className="button-container">
+                        <button 
+                            type="button" 
+                            className="btn"
+                            onClick={sendMessage}
+                            onMouseEnter={() => setShowError(!settings.server)}
+                            onMouseLeave={() => setShowError(false)}
+                        >
+                            Send
+                        </button>
+                        <button 
+                            type="button" 
+                            className="settings-btn" 
+                            onClick={toggleSettings}
+                            title="Settings"
+                        >
+                            <svg width="16" height="16" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M9.1 4.4L8.6 2H7.4L6.9 4.4L6.2 4.6L4.2 3.2L3.2 4.2L4.6 6.2L4.4 6.9L2 7.4V8.6L4.4 9.1L4.6 9.8L3.2 11.8L4.2 12.8L6.2 11.4L6.9 11.6L7.4 14H8.6L9.1 11.6L9.8 11.4L11.8 12.8L12.8 11.8L11.4 9.8L11.6 9.1L14 8.6V7.4L11.6 6.9L11.4 6.2L12.8 4.2L11.8 3.2L9.8 4.6L9.1 4.4ZM8 10C6.9 10 6 9.1 6 8C6 6.9 6.9 6 8 6C9.1 6 10 6.9 10 8C10 9.1 9.1 10 8 10Z" />
+                            </svg>
+                        </button>
+                        <button 
+                            type="button" 
+                            className="settings-btn"
+                            onClick={clearConversation}
+                            title="Clear Conversation"
+                        >
+                            <svg width="16" height="16" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M8 2C11.3 2 14 4.7 14 8C14 11.3 11.3 14 8 14C4.7 14 2 11.3 2 8C2 4.7 4.7 2 8 2ZM8 1C4.1 1 1 4.1 1 8C1 11.9 4.1 15 8 15C11.9 15 15 11.9 15 8C15 4.1 11.9 1 8 1ZM10.7 11.5L8 8.8L5.3 11.5L4.5 10.7L7.2 8L4.5 5.3L5.3 4.5L8 7.2L10.7 4.5L11.5 5.3L8.8 8L11.5 10.7L10.7 11.5Z" />
+                            </svg>
+                        </button>
+                    </div>
+                    {showError && (
+                        <div className="error">
+                            Please insert an IP Address in the configuration below.
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {showSettings && (
+                <SettingsDialog
+                    settings={settings}
+                    onClose={toggleSettings}
+                    onChange={updateSettings}
+                />
+            )}
+        </React.Fragment>
+    );
+};
+
+const ChatMessage = ({ side, text, time }) => {
+    const messageRef = React.useRef(null);
+
+    React.useEffect(() => {
+        if (messageRef.current) {
+            const content = converter.makeHtml(text);
+            messageRef.current.innerHTML = content;
+            applyCodeHighlighting(messageRef.current);
+        }
+    }, [text]);
+
+    return (
+        <div className={`chat-message ${side === 'right' ? 'user-message' : 'assistant-message'}`}>
+            <div className="message-content">
+                <div className="message-header">
+                    {side === 'right' ? (
+                        <span className="avatar">You</span>
+                    ) : (
+                        <div className="avatar-container">
+                            <span className="avatar-icon">🤖</span>
+                            <span className="avatar">AI</span>
+                        </div>
+                    )}
+                    <span className="message-time">
+                        {time.toLocaleTimeString()}
+                    </span>
+                </div>
+                <div className="message-body">
+                    <div ref={messageRef} />
+                </div>
+            </div>
+        </div>
+    );
+};
+
+const ReferencedFiles = ({ files, onRemove }) => (
+    <div className="referenced-files">
+        {Array.from(files.entries()).map(([path]) => (
+            <div key={path} className="file-chip" title={path}>
+                <span>{getFileName(path)}</span>
+                <button className="remove-file" onClick={() => onRemove(path)}>×</button>
+            </div>
+        ))}
+    </div>
+);
+
+const FileDropdown = ({ files, selectedIndex, onSelect }) => (
+    <div className="file-dropdown" style={{ display: 'block' }}>
+        {files.length === 0 ? (
+            <div className="file-item no-results">No files found</div>
+        ) : (
+            files.map((file, index) => (
+                <div
+                    key={file}
+                    className={`file-item${index === selectedIndex ? ' selected' : ''}`}
+                    onClick={() => onSelect(file)}
+                >
+                    {file}
+                </div>
+            ))
+        )}
+    </div>
+);
+
+const SettingsDialog = ({ settings, onClose, onChange }) => {
+    const dialogRef = React.useRef(null);
+
+    React.useEffect(() => {
+        if (dialogRef.current) {
+            dialogRef.current.showModal();
+        }
+        return () => {
+            if (dialogRef.current && dialogRef.current.open) {
+                dialogRef.current.close();
+            }
+        };
+    }, []);
+
+    const handleBackdropClick = (e) => {
+        if (e.target === dialogRef.current) {
+            onClose();
+        }
+    };
+
+    const handleNumberInput = (e, field) => {
+        const value = parseFloat(e.target.value);
+        if (!isNaN(value)) {
+            onChange({ ...settings, [field]: value });
+        }
+    };
+
+    return (
+        <dialog 
+            ref={dialogRef} 
+            className="settings-dialog" 
+            onClick={handleBackdropClick}
+        >
+            <div className="settings-header">
+                <h2>Settings</h2>
+                <button className="close-btn" onClick={onClose}>×</button>
+            </div>
+            <div className="settings-content">
+                <div className="settings-section">
+                    <h3 className="settings-section-title">Server Configuration</h3>
+                    <p>Insert your LLM server</p>
+                    <p>You can use:</p>
+                    <ul>
+                        <li>LM Studio</li>
+                        <li>Ollama</li>
+                        <li>Vllm</li>
+                        <li>Any other LLM server that supports the OpenAI API standard</li>
+                    </ul>
+                    <div className="input-control">
+                        <label htmlFor="ipAddress">IP Address</label>
+                        <input
+                            type="text"
+                            name="ipAddress"
+                            id="ipAddress"
+                            placeholder="http://localhost:1234"
+                            className="input"
+                            value={settings.server}
+                            onChange={e => onChange({ ...settings, server: e.target.value })}
+                        />
+                    </div>
+
+                    <div className="input-control">
+                        <label htmlFor="token">API Token</label>
+                        <input
+                            type="password"
+                            name="token"
+                            id="token"
+                            placeholder="Leave blank if you are using your own LLM server"
+                            className="input"
+                            value={settings.token}
+                            onChange={e => onChange({ ...settings, token: e.target.value })}
+                        />
+                        <small>Only if you are using oficial OpenAI API</small>
                     </div>
                 </div>
-            </div>`;
-    
-    // Clear referenced files
-    referencedFiles.clear();
-    updateReferencedFiles();
-    
-    // Clear the input
-    document.getElementById('in-text').value = '';
-    validateInput();
-    
-    // Notify the extension to clear message history
-    vscodeContext.postMessage({
-        command: 'your-copilot.clear-conversation'
+
+                <div className="settings-section">
+                    <h3 className="settings-section-title">Model Parameters</h3>
+                    <div className="input-control number-input">
+                        <label htmlFor="max_tokens">Max Tokens</label>
+                        <input
+                            type="number"
+                            name="max_tokens"
+                            id="max_tokens"
+                            min="1"
+                            max="32000"
+                            className="input"
+                            value={settings.max_tokens}
+                            onChange={e => handleNumberInput(e, 'max_tokens')}
+                        />
+                        <small>Maximum number of tokens to generate (default: 4096)</small>
+                    </div>
+
+                    <div className="input-control number-input">
+                        <label htmlFor="temperature">Temperature</label>
+                        <input
+                            type="number"
+                            name="temperature"
+                            id="temperature"
+                            min="0"
+                            max="2"
+                            step="0.1"
+                            className="input"
+                            value={settings.temperature}
+                            onChange={e => handleNumberInput(e, 'temperature')}
+                        />
+                        <small>Controls randomness (0 = deterministic, 2 = maximum creativity, default: 0.7)</small>
+                    </div>
+                </div>
+
+                <div className="settings-section">
+                    <h3 className="settings-section-title">Response Options</h3>
+                    <div className="input-control">
+                        <label className="label-check">
+                            <input
+                                type="checkbox"
+                                name="stream"
+                                id="stream"
+                                className="input-check"
+                                checked={settings.stream}
+                                onChange={e => onChange({ ...settings, stream: e.target.checked })}
+                            />
+                            Stream responses
+                        </label>
+                        <small>Enable real-time streaming of responses</small>
+                    </div>
+                </div>
+            </div>
+        </dialog>
+    );
+};
+
+function getFileName(path) {
+    if (!path) return '';
+    const parts = path.split('/');
+    return parts[parts.length - 1] || '';
+}
+
+function applyCodeHighlighting(container) {
+    const codeBlocks = container.querySelectorAll('pre code');
+    codeBlocks.forEach(block => {
+        let language = '';
+        block.classList.forEach(className => {
+            if (className.startsWith('language-')) {
+                language = className.replace('language-', '');
+            }
+        });
+
+        if (language && Prism.languages[language]) {
+            block.innerHTML = Prism.highlight(
+                block.textContent,
+                Prism.languages[language],
+                language
+            );
+
+            // Add code action buttons
+            const pre = block.parentElement;
+            const actionsContainer = document.createElement('div');
+            actionsContainer.className = 'code-actions';
+
+            // Copy button
+            const copyButton = document.createElement('button');
+            copyButton.className = 'code-action-btn';
+            copyButton.innerHTML = `
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16">
+                    <path d="M4 2h8v2H4V2zM3 5h9v2H3V5zm0 3h7v2H3V8zm0 3h5v2H3v-2z"/>
+                </svg>
+                Copy
+            `;
+            copyButton.onclick = () => {
+                navigator.clipboard.writeText(block.textContent);
+                copyButton.innerHTML = `
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16">
+                        <path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 0 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0z"/>
+                    </svg>
+                    Copied!
+                `;
+                setTimeout(() => {
+                    copyButton.innerHTML = `
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16">
+                            <path d="M4 2h8v2H4V2zM3 5h9v2H3V5zm0 3h7v2H3V8zm0 3h5v2H3v-2z"/>
+                        </svg>
+                        Copy
+                    `;
+                }, 2000);
+            };
+
+            // Apply diff button
+            const applyButton = document.createElement('button');
+            applyButton.className = 'code-action-btn';
+            applyButton.innerHTML = `
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16">
+                    <path d="M13.5 3h-11a.5.5 0 0 0-.5.5v9a.5.5 0 0 0 .5.5h11a.5.5 0 0 0 .5-.5v-9a.5.5 0 0 0-.5-.5zm-11-1h11a1.5 1.5 0 0 1 1.5 1.5v9a1.5 1.5 0 0 1-1.5 1.5h-11a1.5 1.5 0 0 1-1.5-1.5v-9A1.5 1.5 0 0 1 2.5 2z"/>
+                    <path d="M7.646 8.646a.5.5 0 0 1 .708 0l2 2a.5.5 0 0 1-.708.708L8.5 10.207V14.5a.5.5 0 0 1-1 0V10.207L6.354 11.354a.5.5 0 1 1-.708-.708l2-2z"/>
+                </svg>
+                Apply
+            `;
+            applyButton.onclick = () => {
+                vscodeContext.postMessage({
+                    command: 'your-copilot.apply-diff',
+                    code: block.textContent,
+                    language: language
+                });
+            };
+
+            actionsContainer.appendChild(copyButton);
+            actionsContainer.appendChild(applyButton);
+            pre.appendChild(actionsContainer);
+        }
     });
-} 
+}
+
+// Render the app
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(<App />); 

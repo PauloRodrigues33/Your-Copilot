@@ -16,6 +16,8 @@ interface Settings {
     token: string;
     maxContextMessages: number;
     stream: boolean;
+    max_tokens: number;
+    temperature: number;
 }
 
 // Constants
@@ -23,7 +25,9 @@ const DEFAULT_SETTINGS: Settings = {
     server: 'http://localhost:1234',
     token: '',
     maxContextMessages: 30,
-    stream: false
+    stream: false,
+    max_tokens: 4096,
+    temperature: 0.7
 };
 
 const DEFAULT_CHARACTER: string = `You are an intelligent assistant designed to assist software developers with various tasks related to coding, troubleshooting, debugging, writing tests, and general development-related inquiries. You should be responsive, knowledgeable, and provide clear, actionable advice.
@@ -130,7 +134,9 @@ class GlobalState {
             server: context.globalState.get('server') as string || DEFAULT_SETTINGS.server,
             token: context.globalState.get('token') as string || DEFAULT_SETTINGS.token,
             maxContextMessages: context.globalState.get('maxContextMessages') as number || DEFAULT_SETTINGS.maxContextMessages,
-            stream: context.globalState.get('stream') as boolean || DEFAULT_SETTINGS.stream
+            stream: context.globalState.get('stream') as boolean || DEFAULT_SETTINGS.stream,
+            max_tokens: context.globalState.get('max_tokens') as number || DEFAULT_SETTINGS.max_tokens,
+            temperature: context.globalState.get('temperature') as number || DEFAULT_SETTINGS.temperature
         };
     }
 
@@ -174,10 +180,12 @@ export function activate(context: vscode.ExtensionContext) {
                 
                 if (webview) {
                     try {
-                        // Ignore some file types that shouldn't be referenced
+                        // Ignore some file types and temporary files that shouldn't be referenced
                         const ignoredExtensions = ['.git', '.pdf', '.jpg', '.png', '.ico'];
                         const filePath = editor.document.uri.fsPath;
-                        if (ignoredExtensions.some(ext => filePath.endsWith(ext))) {
+                        if (ignoredExtensions.some(ext => filePath.endsWith(ext)) || 
+                            editor.document.isUntitled || 
+                            filePath.endsWith('.proposed')) {
                             return;
                         }
 
@@ -254,6 +262,45 @@ class YourCopilotWebViewProvider implements vscode.WebviewViewProvider {
 
                     case 'your-copilot.clear-conversation':
                         state.clearMessageHistory();
+                        return;
+
+                    case 'your-copilot.apply-diff':
+                        const editor = vscode.window.activeTextEditor;
+                        if (editor) {
+                            try {
+                                const document = editor.document;
+                                const newContent = message.code;
+                                const fileName = path.basename(document.fileName);
+
+                                // Create a temporary file with the proper scheme
+                                const tempUri = vscode.Uri.parse(`untitled:${fileName}.proposed`);
+                                
+                                // Create and show the diff
+                                const originalDoc = editor.document;
+                                const diffDoc = await vscode.workspace.openTextDocument(tempUri);
+                                
+                                // Write content to the temp document
+                                const edit = new vscode.WorkspaceEdit();
+                                edit.insert(tempUri, new vscode.Position(0, 0), newContent);
+                                await vscode.workspace.applyEdit(edit);
+                                
+                                // Show diff editor
+                                await vscode.commands.executeCommand('vscode.diff',
+                                    originalDoc.uri,
+                                    tempUri,
+                                    'Current ↔ Proposed Changes',
+                                    {
+                                        preview: true,
+                                        preserveFocus: true
+                                    }
+                                );
+
+                            } catch (error: any) {
+                                vscode.window.showErrorMessage('Failed to show diff: ' + (error.message || 'Unknown error'));
+                            }
+                        } else {
+                            vscode.window.showWarningMessage('No active editor to apply code to.');
+                        }
                         return;
                 }
             },
@@ -358,42 +405,71 @@ class YourCopilot {
         }
     }
 
-    private static async sendNonStreamingMessage(messageData: { server: string; message: string; token?: string }) {
+    private static async sendNonStreamingMessage(messageData: { server: string; message: string; token?: string; fileRefs?: string[]; fileContents?: Record<string, string> }) {
         const state = GlobalState.getInstance();
         const messages = state.getMessageHistory();
+        const settings = state.getSettings();
+
+        // Prepare the message with file contents
+        let userMessage = messageData.message;
+        if (messageData.fileRefs && messageData.fileContents) {
+            userMessage += '\n\nReferenced files:\n';
+            messageData.fileRefs.forEach(filePath => {
+                const content = messageData.fileContents?.[filePath];
+                if (content) {
+                    userMessage += `\n${filePath}:\n\`\`\`\n${content}\n\`\`\`\n`;
+                }
+            });
+        }
+
+        // Update messages with file contents
+        messages.push({ role: 'user', content: userMessage });
+
+        const headers: Record<string, string> = {
+            'Content-Type': 'application/json'
+        };
+        
+        if (messageData.token) {
+            headers['Authorization'] = `Bearer ${messageData.token}`;
+        }
 
         return await axios.post(
             `${messageData.server}/v1/chat/completions`,
             {
                 messages: messages,
-                temperature: 0.7,
-                max_tokens: 128,
-                model: 'gpt-3.5-turbo',
+                temperature: settings.temperature,
+                max_tokens: settings.max_tokens,
                 stream: false
             },
             {
                 maxBodyLength: Infinity,
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': messageData.token ? `Bearer ${messageData.token}` : undefined
-                }
+                headers
             }
         );
     }
 
-    private static async sendStreamingMessage(messageData: { server: string; message: string }) {
+    private static async sendStreamingMessage(messageData: { server: string; message: string; token?: string; stream?: boolean; fileRefs?: string[]; fileContents?: Record<string, string> }) {
         const state = GlobalState.getInstance();
         const webview = state.getWebview();
         if (!webview) return;
 
         const messages = state.getMessageHistory();
+        const settings = state.getSettings();
         const [hostname, port] = messageData.server.split('://')[1].split(':');
+        const headers: Record<string, string> = {
+            'Content-Type': 'application/json'
+        };
+        
+        if (messageData.token) {
+            headers['Authorization'] = `Bearer ${messageData.token}`;
+        }
+
         const options = {
             method: 'POST',
             hostname,
             port,
             path: '/v1/chat/completions',
-            headers: { 'Content-Type': 'application/json' },
+            headers,
             maxRedirects: 20
         };
 
@@ -401,22 +477,51 @@ class YourCopilot {
         let fullMessage = '';
 
         const req = http.request(options, (res) => {
+            let buffer = '';
+            
             res.on("data", (chunk) => {
                 try {
                     const chunkStr = chunk.toString();
-                    if (chunkStr !== 'data: [DONE]' && chunkStr.startsWith('data: ')) {
-                        const jsonChunk = JSON.parse(chunkStr.slice(6)); // Remove 'data: ' prefix
-                        const content = jsonChunk.choices[0]?.delta?.content || '';
+                    buffer += chunkStr;
+                    
+                    const lines = buffer.split('\n');
+                    buffer = lines.pop() || ''; // Keep the last incomplete line in the buffer
+                    
+                    for (const line of lines) {
+                        if (line.trim() === '') continue;
                         
-                        if (content) {
-                            fullMessage += content;
-                            webview.postMessage({
-                                command: 'your-copilot.receive-stream',
-                                text: {
-                                    ...jsonChunk,
-                                    id: streamId
+                        const dataStr = line.trim();
+                        if (dataStr === 'data: [DONE]') {
+                            // Stream is complete
+                            if (fullMessage) {
+                                state.addMessage({ role: 'assistant', content: fullMessage });
+                                webview.postMessage({
+                                    command: 'your-copilot.receive-stream',
+                                    text: {
+                                        id: streamId,
+                                        finish_reason: 'stop'
+                                    }
+                                });
+                            }
+                            continue;
+                        }
+                        
+                        if (dataStr.startsWith('data: ')) {
+                            try {
+                                const jsonData = JSON.parse(dataStr.slice(6)); // Remove 'data: ' prefix
+                                const content = jsonData.choices[0]?.delta?.content || '';
+                                
+                                if (content) {
+                                    fullMessage += content;
+                                    webview.postMessage({
+                                        command: 'your-copilot.receive-stream',
+                                        text: content
+                                    });
                                 }
-                            });
+                            } catch (parseError) {
+                                console.warn('Error parsing JSON chunk:', parseError);
+                                // Continue processing other chunks even if one fails
+                            }
                         }
                     }
                 } catch (e) {
@@ -459,10 +564,25 @@ class YourCopilot {
             });
         });
 
+        // Prepare the message with file contents
+        let userMessage = messageData.message;
+        if (messageData.fileRefs && messageData.fileContents) {
+            userMessage += '\n\nReferenced files:\n';
+            messageData.fileRefs.forEach(filePath => {
+                const content = messageData.fileContents?.[filePath];
+                if (content) {
+                    userMessage += `\n${filePath}:\n\`\`\`\n${content}\n\`\`\`\n`;
+                }
+            });
+        }
+
+        // Update messages with file contents
+        messages.push({ role: 'user', content: userMessage });
+
         req.write(JSON.stringify({
             messages: messages,
-            temperature: 0.7,
-            max_tokens: -1,
+            temperature: settings.temperature,
+            max_tokens: settings.max_tokens,
             stream: true
         }));
 
@@ -470,21 +590,36 @@ class YourCopilot {
     }
 
     private static handleError(error: any, server: string, webview: vscode.Webview) {
-        console.error(`Error when sending message: ${error}`);
+        console.error(`Error when sending message:`, error);
         
-        if (server.includes('api.openai.com')) {
+        let errorMessage = 'Error when sending message';
+        
+        if (error?.message) {
+            errorMessage += ` - ${error.message}`;
+        }
+        
+        if (error?.response?.data?.error?.message) {
+            errorMessage += ` | ${error.response.data.error.message}`;
+        }
+        
+        if (server && typeof server === 'string' && server.includes('api.openai.com')) {
             vscode.window.showErrorMessage(
-                `Your-Copilot - Error when sending message - ${error.message} | ${error.response?.data?.error?.message}`,
+                `Your-Copilot - ${errorMessage}`,
                 'Dismiss'
             );
         } else {
             vscode.window.showErrorMessage(
-                `Your-Copilot - Error when sending message - ${error.message}`,
+                `Your-Copilot - ${errorMessage}`,
                 'Dismiss'
             );
         }
 
-        webview.postMessage({ command: 'your-copilot.error', text: "" });
+        if (webview) {
+            webview.postMessage({ 
+                command: 'your-copilot.error', 
+                text: errorMessage 
+            });
+        }
     }
 
     static async predictCode(server: string, message: string, token?: string) {
@@ -496,7 +631,7 @@ class YourCopilot {
                     { role: 'user', content: message }
                 ],
                 temperature: 0.7,
-                max_tokens: -1,
+                max_tokens: 128,
                 stream: false
             },
             {
